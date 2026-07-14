@@ -5,12 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Cipher Quest - Midnight Chase</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Shippori+Mincho:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Shippori+Mincho:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/game.css">
 </head>
 <body>
   <!-- 3D canvas -->
   <div id="canvas-wrap"><canvas id="gl"></canvas></div>
+
+  <!-- cinematic letterbox bars -->
+  <div class="letterbox top"></div>
+  <div class="letterbox bottom"></div>
 
   <!-- ============ overlays ============ -->
 
@@ -22,6 +26,11 @@
       <p class="wait-msg">プレイヤー名を入力して荘園に入場</p>
       <input id="name-input" type="text" maxlength="12" placeholder="名前 (12文字まで)" autocomplete="off">
       <button class="btn" id="btn-join">入場する</button>
+      <div class="howto">
+        <div class="howto-row"><span class="key">WASD / ドラッグ</span> 移動</div>
+        <div class="howto-row"><span class="key">SPACE / 長押し</span> 解読・救助</div>
+        <div class="howto-row"><span class="key">QTE</span> 針がゾーンに入った瞬間に SPACE</div>
+      </div>
     </div>
     <a class="back-link" href="/">&#8617; 暗号機画面へ戻る</a>
   </div>
@@ -71,17 +80,29 @@
         <div class="cipher-dot"></div>
       </div>
       <div class="hud-hp" id="hud-hp">
-        <div class="hp-pip"></div><div class="hp-pip"></div><div class="hp-pip"></div>
+        <div class="hp-pip"></div><div class="hp-pip"></div>
       </div>
     </div>
 
-    <div id="decode-hint" style="display:none">長押し / SPACE で解読</div>
+    <!-- teammate status strip (left side) -->
+    <div id="team-strip"></div>
+
+    <div id="decode-hint" style="display:none"><span class="hint-text">長押し / SPACE で解読</span></div>
     <div id="gate-hint" style="display:none">ゲートが開いた — 端まで走れ!</div>
     <div id="state-banner" style="display:none"></div>
+
+    <!-- bleedout bar while downed -->
+    <div id="bleedout-wrap" style="display:none">
+      <div class="bleedout-label">出血</div>
+      <div class="bleedout-track"><div id="bleedout-bar"></div></div>
+    </div>
 
     <div id="decode-bar-wrap" style="display:none"><div id="decode-bar"></div></div>
     <div id="event-feed"></div>
     <div id="danger-vignette"></div>
+
+    <!-- skill check QTE canvas (center) -->
+    <canvas id="skill-canvas" width="260" height="260"></canvas>
 
     <!-- touch controls (shown via body.touch) -->
     <div id="joystick"><div id="joy-knob"></div></div>
@@ -92,8 +113,12 @@
   <script src="js/vendor/three.min.js"></script>
   <script src="js/net.js"></script>
   <script src="js/input.js"></script>
+  <script src="js/textures.js"></script>
+  <script src="js/sound.js"></script>
   <script src="js/world3d.js"></script>
   <script src="js/characters.js"></script>
+  <script src="js/effects.js"></script>
+  <script src="js/skillcheck.js"></script>
   <script src="js/hud.js"></script>
   <script src="js/main.js"></script>
   <script>
