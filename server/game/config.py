@@ -26,8 +26,24 @@ GATE_RADIUS = 2.5
 SURVIVOR_SPEED = 6.0        # m/s
 SURVIVOR_HIT_BOOST = 1.5    # speed multiplier after being hit
 HIT_BOOST_SEC = 3.0
-SURVIVOR_HP = 2
+SURVIVOR_HP = 2             # 2 hits -> downed
 PLAYER_TIMEOUT_SEC = 6      # drop silent players
+
+# ---------- down / rescue (Identity V style) ----------
+DOWN_BLEEDOUT_SEC = 40      # downed survivor bleeds out -> eliminated
+RESCUE_TIME_SEC = 2.6       # hold interact near downed ally to rescue
+RESCUE_RADIUS = 1.8         # metres
+RESCUED_HP = 1              # hp restored after rescue (next hit downs)
+
+# ---------- skill checks (QTE while decoding) ----------
+SKILL_MIN_GAP_SEC = 4.0     # min seconds of decoding between checks
+SKILL_MAX_GAP_SEC = 8.0
+SKILL_WINDOW_SEC = 2.4      # time client has to respond
+SKILL_MISS_PENALTY = 9.0    # cipher progress % lost on miss
+SKILL_GREAT_BONUS = 4.0     # cipher progress % gained on perfect hit
+
+# ---------- atmosphere ----------
+TERROR_RADIUS = 17.0        # heartbeat audible range (client hint)
 
 
 class GameConfig:
