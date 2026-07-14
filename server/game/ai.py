@@ -102,7 +102,7 @@ def tick_hunter(hunter, survivors, ciphers, dt: float):
 # --------------------------------------------------------------------------
 # bot survivor AI
 # --------------------------------------------------------------------------
-def tick_bot(bot, hunter, ciphers, dt: float):
+def tick_bot(bot, hunter, ciphers, dt: float, survivors=None):
     """One AI tick for a CPU survivor."""
     if bot.state != "alive":
         return
@@ -116,6 +116,7 @@ def tick_bot(bot, hunter, ciphers, dt: float):
     danger = 6.0 + 8.0 * gc.bot_flee_skill
     if sees_hunter and hd < danger:
         bot.decoding_cipher = -1
+        bot.rescuing_id = None
         # run away, weaving behind obstacles
         ang = math.atan2(bot.x - hunter.x, bot.z - hunter.z)
         ang += _rand.uniform(-0.5, 0.5) * (1 - gc.bot_flee_skill)
@@ -125,6 +126,28 @@ def tick_bot(bot, hunter, ciphers, dt: float):
         _step_towards(bot, fx, fz, bot.speed, dt)
         bot.bot_repath_at = 0.0  # force repath after escape
         return
+
+    # ---- rescue a downed ally (if hunter is not camping too close) ----
+    if survivors:
+        downed = [s for s in survivors
+                  if s.state == "down" and s.id != bot.id]
+        if downed:
+            downed.sort(key=lambda s: world.dist(bot.x, bot.z, s.x, s.z))
+            victim = downed[0]
+            hunter_near_victim = world.dist(
+                hunter.x, hunter.z, victim.x, victim.z) < 7.0
+            if not hunter_near_victim:
+                d = world.dist(bot.x, bot.z, victim.x, victim.z)
+                if d <= cfg.RESCUE_RADIUS:
+                    bot.decoding_cipher = -1
+                    bot.rescuing_id = victim.id   # match.py advances progress
+                    return
+                if d < 26.0:
+                    bot.decoding_cipher = -1
+                    bot.rescuing_id = None
+                    _step_towards(bot, victim.x, victim.z, bot.speed, dt)
+                    return
+    bot.rescuing_id = None
 
     # ---- pick a cipher to work on ----
     if bot.bot_cipher < 0 or ciphers[bot.bot_cipher].done or t >= bot.bot_repath_at:
