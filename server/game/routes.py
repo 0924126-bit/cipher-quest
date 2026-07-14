@@ -112,6 +112,10 @@ async def ws_game(ws: WebSocket):
                     s.in_x = float(d.get("x", 0))
                     s.in_z = float(d.get("z", 0))
                     s.in_decode = bool(d.get("decode", False))
+            elif t == "skill" and player.survivor_id:
+                match.handle_skill_reply(
+                    player.survivor_id, int(d.get("seq", -1)),
+                    bool(d.get("success")), bool(d.get("great")))
             elif t == "ping":
                 await ws.send_text('{"type":"pong"}')
     except (WebSocketDisconnect, Exception):
