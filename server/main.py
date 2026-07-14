@@ -19,8 +19,15 @@ from pydantic import BaseModel
 
 from store import store
 from connections import manager
+from game.routes import router as game_router, pump_loop
 
 app = FastAPI(title="Cipher Quest API")
+app.include_router(game_router)
+
+
+@app.on_event("startup")
+async def _startup():
+    asyncio.create_task(pump_loop())
 
 app.add_middleware(
     CORSMiddleware,
