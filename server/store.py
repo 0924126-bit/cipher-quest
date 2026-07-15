@@ -11,7 +11,19 @@ import threading
 
 DATA_FILE = os.path.join(os.path.dirname(__file__), "data.json")
 
+# Machine visual design presets selectable from the operator dashboard.
+# Keep in sync with lib/decoder/widgets/machine_designs.dart on the client.
+VALID_DESIGNS = ("classic", "mahogany", "military", "brass", "noir")
+DEFAULT_DESIGN = "classic"
+
 _lock = threading.Lock()
+
+
+def sanitize_design(design) -> str:
+    """Return a valid design key, falling back to the default."""
+    if isinstance(design, str) and design in VALID_DESIGNS:
+        return design
+    return DEFAULT_DESIGN
 
 
 def _now_ms() -> int:
@@ -37,6 +49,8 @@ class MachineStore:
                     m["connected"] = False
                     if m["status"] == "decoding":
                         m["status"] = "paused"
+                    # migrate old records that predate the design field
+                    m["design"] = sanitize_design(m.get("design"))
             except Exception:
                 self.machines = {}
                 self.events = []
@@ -59,13 +73,14 @@ class MachineStore:
     def get(self, machine_id):
         return self.machines.get(machine_id)
 
-    def create(self, name: str, duration_sec: int = 60):
+    def create(self, name: str, duration_sec: int = 60, design: str = DEFAULT_DESIGN):
         with _lock:
             mid = uuid.uuid4().hex[:8]
             machine = {
                 "id": mid,
                 "name": name or f"暗号機 {len(self.machines) + 1}",
                 "duration_sec": max(5, min(3600, int(duration_sec))),
+                "design": sanitize_design(design),
                 "progress": 0.0,          # 0-100
                 "status": "idle",          # idle / decoding / paused / completed
                 "connected": False,
@@ -79,7 +94,7 @@ class MachineStore:
             self._save()
             return machine
 
-    def update_settings(self, machine_id, name=None, duration_sec=None):
+    def update_settings(self, machine_id, name=None, duration_sec=None, design=None):
         with _lock:
             m = self.machines.get(machine_id)
             if not m:
@@ -88,6 +103,8 @@ class MachineStore:
                 m["name"] = name.strip()
             if duration_sec is not None:
                 m["duration_sec"] = max(5, min(3600, int(duration_sec)))
+            if design is not None:
+                m["design"] = sanitize_design(design)
             m["updated_at"] = _now_ms()
             self._save()
             return m
