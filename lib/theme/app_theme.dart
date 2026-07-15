@@ -1,22 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Identity V inspired dark gothic palette + minimal dashboard theme.
+/// App-wide color definitions.
+///
+/// Decoder page: calm "old workshop" palette (Identity V cipher machine mood).
+/// Dashboard: Google-style minimal light palette (unchanged).
 class AppColors {
-  // Decoder (gothic horror)
-  static const bg = Color(0xFF0A0A0F);
-  static const bgDeep = Color(0xFF050508);
-  static const surface = Color(0xFF14141C);
-  static const amber = Color(0xFFE8A33D); // lantern amber
-  static const amberDim = Color(0xFF8A5F20);
-  static const cyan = Color(0xFF52E0D8); // cipher glow
-  static const cyanDim = Color(0xFF1E6B66);
-  static const blood = Color(0xFFB3232A);
-  static const bone = Color(0xFFD8D3C4); // aged paper text
-  static const boneDim = Color(0xFF7A766A);
-  static const violet = Color(0xFF7C5CBF);
+  // ---- Decoder (quiet workshop) ----
+  /// Page background top / bottom.
+  static const bg = Color(0xFF171512);
+  static const bgDeep = Color(0xFF0E0D0B);
 
-  // Dashboard (minimal)
+  /// Panel-ish surface.
+  static const surface = Color(0xFF201D19);
+
+  /// Warm lantern amber, used sparingly for progress and lamps.
+  static const amber = Color(0xFFD9A441);
+  static const amberDim = Color(0xFF6E5526);
+
+  /// Aged paper text.
+  static const bone = Color(0xFFD8D3C4);
+  static const boneDim = Color(0xFF837E70);
+
+  /// Danger red (errors, delete).
+  static const blood = Color(0xFFA8332F);
+
+  /// Success green lamp on completion.
+  static const lamp = Color(0xFF7FB069);
+
+  // ---- Dashboard (minimal) ----
   static const dashBg = Color(0xFFFAFAFA);
   static const dashSurface = Colors.white;
   static const dashInk = Color(0xFF202124);
@@ -29,22 +41,20 @@ class AppColors {
 }
 
 class AppTheme {
-  /// Gothic theme for decoder pages.
+  /// Quiet workshop theme for decoder pages.
   static ThemeData decoder() {
     final base = ThemeData.dark(useMaterial3: true);
     return base.copyWith(
       scaffoldBackgroundColor: AppColors.bg,
       colorScheme: base.colorScheme.copyWith(
-        primary: AppColors.cyan,
-        secondary: AppColors.amber,
+        primary: AppColors.amber,
+        secondary: AppColors.bone,
         surface: AppColors.surface,
         error: AppColors.blood,
       ),
-      textTheme: GoogleFonts.cinzelTextTheme(base.textTheme).copyWith(
-        bodyMedium: GoogleFonts.shipporiMincho(
-            color: AppColors.bone, fontSize: 14),
-        bodySmall: GoogleFonts.shipporiMincho(
-            color: AppColors.boneDim, fontSize: 12),
+      textTheme: GoogleFonts.shipporiMinchoTextTheme(base.textTheme).apply(
+        bodyColor: AppColors.bone,
+        displayColor: AppColors.bone,
       ),
     );
   }
