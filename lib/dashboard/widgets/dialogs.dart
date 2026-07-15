@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../decoder/widgets/machine_designs.dart';
 import '../../models/machine.dart';
 import '../../theme/app_theme.dart';
 
@@ -137,16 +138,18 @@ class _CopyButtonState extends State<_CopyButton> {
 }
 
 /// ---------- create / edit machine dialog ----------
-/// Returns (name, durationSec) or null when cancelled.
-Future<({String name, int durationSec})?> showMachineFormDialog(
+/// Returns (name, durationSec, design) or null when cancelled.
+Future<({String name, int durationSec, String design})?>
+    showMachineFormDialog(
   BuildContext context, {
   Machine? existing,
 }) {
   final nameCtrl = TextEditingController(text: existing?.name ?? '');
   final isEdit = existing != null;
   int duration = existing?.durationSec ?? 60;
+  String design = existing?.design ?? 'classic';
 
-  return showDialog<({String name, int durationSec})>(
+  return showDialog<({String name, int durationSec, String design})>(
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setState) {
@@ -220,6 +223,19 @@ Future<({String name, int durationSec})?> showMachineFormDialog(
                     ],
                   ),
                   const SizedBox(height: 28),
+                  const Text(
+                    'デザイン',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _DesignPicker(
+                    selected: design,
+                    onChanged: (key) => setState(() => design = key),
+                  ),
+                  const SizedBox(height: 28),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
@@ -237,7 +253,11 @@ Future<({String name, int durationSec})?> showMachineFormDialog(
                           if (name.isEmpty) return;
                           Navigator.pop(
                             context,
-                            (name: name, durationSec: duration),
+                            (
+                              name: name,
+                              durationSec: duration,
+                              design: design,
+                            ),
                           );
                         },
                         child: Text(isEdit ? '保存' : '追加'),
@@ -252,6 +272,174 @@ Future<({String name, int durationSec})?> showMachineFormDialog(
       },
     ),
   );
+}
+
+/// Horizontal list of the 5 machine designs with a mini preview each.
+class _DesignPicker extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  const _DesignPicker({required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedDesign = machineDesignByKey(selected);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            for (final d in kMachineDesigns)
+              _DesignSwatch(
+                design: d,
+                selected: d.key == selected,
+                onTap: () => onChanged(d.key),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          '${selectedDesign.label} — ${selectedDesign.description}',
+          style: const TextStyle(fontSize: 12.5, color: AppColors.dashGrey),
+        ),
+      ],
+    );
+  }
+}
+
+/// A single selectable design tile: mini machine preview + label.
+class _DesignSwatch extends StatelessWidget {
+  final MachineDesign design;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _DesignSwatch({
+    required this.design,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.all(5),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            width: selected ? 2 : 1,
+            color: selected ? AppColors.dashBlue : AppColors.dashLine,
+          ),
+          color: selected
+              ? AppColors.dashBlue.withValues(alpha: 0.06)
+              : Colors.transparent,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: CustomPaint(
+                size: const Size(52, 52),
+                painter: MachineThumbnailPainter(design: design),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              design.label,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                color: selected ? AppColors.dashBlue : AppColors.dashGrey,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Tiny stylized machine preview: crate + body + platen + keys.
+/// Shared with the machine card so previews stay consistent.
+class MachineThumbnailPainter extends CustomPainter {
+  final MachineDesign design;
+
+  MachineThumbnailPainter({required this.design});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    // dark room backdrop
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, w, h),
+      Paint()..color = const Color(0xFF23211E),
+    );
+
+    // crate
+    final crate = Rect.fromLTRB(w * 0.18, h * 0.60, w * 0.82, h * 0.94);
+    canvas.drawRect(crate, Paint()..color = design.crate);
+    final brace = Paint()
+      ..color = design.crateDark
+      ..strokeWidth = w * 0.045
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(crate.topLeft, crate.bottomRight, brace);
+    canvas.drawLine(crate.topRight, crate.bottomLeft, brace);
+
+    // paper
+    canvas.drawRect(
+      Rect.fromLTWH(w * 0.42, h * 0.12, w * 0.16, h * 0.22),
+      Paint()..color = design.paper,
+    );
+
+    // platen
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(w * 0.28, h * 0.30, w * 0.44, h * 0.06),
+        const Radius.circular(3),
+      ),
+      Paint()..color = design.platen,
+    );
+
+    // body
+    canvas.drawRRect(
+      RRect.fromRectAndCorners(
+        Rect.fromLTRB(w * 0.24, h * 0.36, w * 0.76, h * 0.60),
+        topLeft: const Radius.circular(4),
+        topRight: const Radius.circular(4),
+      ),
+      Paint()..color = design.body,
+    );
+
+    // keys: 2 rows of dots
+    final key = Paint()..color = design.keyCap;
+    for (int row = 0; row < 2; row++) {
+      for (int i = 0; i < 5; i++) {
+        canvas.drawCircle(
+          Offset(w * (0.32 + i * 0.09), h * (0.50 + row * 0.06)),
+          w * 0.022,
+          key,
+        );
+      }
+    }
+
+    // lamp
+    canvas.drawCircle(
+      Offset(w * 0.70, h * 0.40),
+      w * 0.028,
+      Paint()..color = design.lampActive,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant MachineThumbnailPainter old) =>
+      old.design != design;
 }
 
 String _fmtDuration(int sec) {
