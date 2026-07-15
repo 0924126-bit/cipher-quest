@@ -33,26 +33,38 @@ class ApiService {
         jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>);
   }
 
-  Future<Machine> createMachine(
-      {required String name, required int durationSec}) async {
+  Future<Machine> createMachine({
+    required String name,
+    required int durationSec,
+    String design = 'classic',
+  }) async {
     final res = await http.post(
       _u('/api/machines'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'name': name, 'duration_sec': durationSec}),
+      body: jsonEncode({
+        'name': name,
+        'duration_sec': durationSec,
+        'design': design,
+      }),
     );
     if (res.statusCode != 200) throw Exception('failed to create machine');
     return Machine.fromJson(
         jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>);
   }
 
-  Future<Machine> updateMachine(String id,
-      {String? name, int? durationSec}) async {
+  Future<Machine> updateMachine(
+    String id, {
+    String? name,
+    int? durationSec,
+    String? design,
+  }) async {
     final res = await http.patch(
       _u('/api/machines/$id'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         if (name != null) 'name': name,
         if (durationSec != null) 'duration_sec': durationSec,
+        if (design != null) 'design': design,
       }),
     );
     if (res.statusCode != 200) throw Exception('failed to update machine');
