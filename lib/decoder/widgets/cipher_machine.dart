@@ -1,25 +1,32 @@
 import 'dart:math';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
-import '../../theme/app_theme.dart';
+import 'machine_designs.dart';
 
-/// The cipher machine: ornate gothic frame, rotating rune ring,
-/// metallic interlocking gears, pulsing energy core, indicator lamps
-/// and electric arcs. The giant "hold here" element of the page.
+/// Identity V style cipher machine:
+/// an antique typewriter sitting on a wooden crate.
+///
+/// Everything is drawn with a single CustomPainter so it scales cleanly.
+/// The [design] preset only swaps colors - the silhouette stays the same.
+///
+/// Visual states:
+///  - idle      : still machine, dim lamp
+///  - holding   : keys jitter, type bars move, lamp glows, paper rises
+///  - completed : paper fully typed, green lamp, machine at rest
 class CipherMachine extends StatefulWidget {
-  final double progress; // 0..100
+  /// 0..100
+  final double progress;
   final bool holding;
   final bool completed;
-  final bool sparkActive;
+  final MachineDesign design;
 
   const CipherMachine({
     super.key,
     required this.progress,
     required this.holding,
     required this.completed,
-    required this.sparkActive,
+    required this.design,
   });
 
   @override
@@ -28,534 +35,507 @@ class CipherMachine extends StatefulWidget {
 
 class _CipherMachineState extends State<CipherMachine>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _spin;
-  double _angle = 0; // accumulated gear angle (rad)
-  double _lastT = 0;
+  late final AnimationController _anim;
 
   @override
   void initState() {
     super.initState();
-    _spin =
-        AnimationController(vsync: this, duration: const Duration(seconds: 8))
-          ..addListener(_accumulate)
-          ..repeat();
-  }
-
-  /// Accumulate rotation so gear speed changes are smooth (no jumps).
-  void _accumulate() {
-    var dt = _spin.value - _lastT;
-    if (dt < 0) dt += 1;
-    _lastT = _spin.value;
-    final speed = widget.holding ? 4.0 : (widget.completed ? 0.4 : 0.6);
-    _angle += dt * 2 * pi * speed;
+    // continuous clock driving key jitter / lamp pulse
+    _anim = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
   }
 
   @override
   void dispose() {
-    _spin.dispose();
+    _anim.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return RepaintBoundary(
-      child: AnimatedBuilder(
-        animation: _spin,
-        builder: (context, _) {
-          return CustomPaint(
-            painter: _MachinePainter(
-              t: _angle,
-              wall: _spin.value * 2 * pi, // wall-clock angle for pulses
-              progress: widget.progress / 100,
-              holding: widget.holding,
-              completed: widget.completed,
-              spark: widget.sparkActive,
-            ),
-            size: Size.infinite,
-          );
-        },
-      ),
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (context, _) {
+        return CustomPaint(
+          painter: _MachinePainter(
+            progress: widget.progress,
+            holding: widget.holding,
+            completed: widget.completed,
+            design: widget.design,
+            t: _anim.value,
+          ),
+        );
+      },
     );
   }
 }
 
 class _MachinePainter extends CustomPainter {
-  final double t; // gear angle (accumulated)
-  final double wall; // steady time angle
   final double progress;
   final bool holding;
   final bool completed;
-  final bool spark;
+  final MachineDesign design;
+
+  /// Animation clock 0..1 (looping).
+  final double t;
 
   _MachinePainter({
-    required this.t,
-    required this.wall,
     required this.progress,
     required this.holding,
     required this.completed,
-    required this.spark,
+    required this.design,
+    required this.t,
   });
 
-  static const _runes = [
-    'ᚠ', 'ᚢ', 'ᚦ', 'ᚨ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚹ', //
-    'ᚺ', 'ᚾ', 'ᛁ', 'ᛃ', 'ᛇ', 'ᛈ', 'ᛉ', 'ᛊ',
-  ];
+  // Deterministic random for stable per-key offsets.
+  final Random _rand = Random(7);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final r = size.shortestSide / 2;
+    final w = size.width;
+    final h = size.height;
 
-    final glowColor = completed
-        ? AppColors.amber
-        : (spark ? AppColors.violet : AppColors.cyan);
-    final pulse = 0.5 + 0.5 * sin(wall * 2.2);
+    // Layout bands (fractions of height):
+    //   paper     : 0.02 - 0.30 (rises out of the platen)
+    //   typewriter: 0.22 - 0.58
+    //   crate     : 0.58 - 0.98
+    final crateRect = Rect.fromLTRB(w * 0.14, h * 0.575, w * 0.86, h * 0.98);
+    final bodyRect = Rect.fromLTRB(w * 0.20, h * 0.335, w * 0.80, h * 0.585);
 
-    // ================= outer glow =================
-    final glowStrength =
-        completed ? 0.55 : (holding ? 0.32 + pulse * 0.12 : 0.15);
-    canvas.drawCircle(
-      center,
-      r * 0.98,
-      Paint()
-        ..color = glowColor.withValues(alpha: glowStrength)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.15),
+    _paintGroundShadow(canvas, w, h);
+    _paintCrate(canvas, crateRect);
+    _paintPaper(canvas, w, h);
+    _paintPlaten(canvas, w, h);
+    _paintBody(canvas, bodyRect, w, h);
+    _paintCarriageLever(canvas, w, h);
+    _paintDial(canvas, w, h);
+    _paintKeyboard(canvas, w, h);
+    _paintLamp(canvas, w, h);
+  }
+
+  // ---------------------------------------------------------------- ground
+
+  void _paintGroundShadow(Canvas canvas, double w, double h) {
+    final paint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.4)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14);
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(w * 0.5, h * 0.985),
+        width: w * 0.74,
+        height: h * 0.05,
+      ),
+      paint,
+    );
+  }
+
+  // ---------------------------------------------------------------- crate
+
+  void _paintCrate(Canvas canvas, Rect r) {
+    final plank = Paint()..color = design.crate;
+    final dark = Paint()..color = design.crateDark;
+
+    // base box
+    canvas.drawRect(r, plank);
+
+    // horizontal plank seams
+    final seam = Paint()
+      ..color = design.crateDark.withValues(alpha: 0.55)
+      ..strokeWidth = r.height * 0.012;
+    const planks = 4;
+    for (int i = 1; i < planks; i++) {
+      final y = r.top + r.height * i / planks;
+      canvas.drawLine(Offset(r.left, y), Offset(r.right, y), seam);
+    }
+
+    // frame (edge battens)
+    final frameW = r.width * 0.055;
+    canvas.drawRect(
+        Rect.fromLTWH(r.left, r.top, frameW, r.height), dark);
+    canvas.drawRect(
+        Rect.fromLTWH(r.right - frameW, r.top, frameW, r.height), dark);
+    canvas.drawRect(
+        Rect.fromLTWH(r.left, r.top, r.width, frameW * 0.75), dark);
+    canvas.drawRect(
+        Rect.fromLTWH(r.left, r.bottom - frameW * 0.75, r.width, frameW * 0.75),
+        dark);
+
+    // X cross brace
+    final brace = Paint()
+      ..color = design.crateDark
+      ..strokeWidth = frameW * 0.8
+      ..strokeCap = StrokeCap.round;
+    final inset = frameW * 1.3;
+    canvas.drawLine(
+      Offset(r.left + inset, r.top + inset),
+      Offset(r.right - inset, r.bottom - inset),
+      brace,
+    );
+    canvas.drawLine(
+      Offset(r.right - inset, r.top + inset),
+      Offset(r.left + inset, r.bottom - inset),
+      brace,
     );
 
-    // ================= gothic outer frame =================
-    // dark iron ring
-    canvas.drawCircle(
-      center,
-      r * 0.90,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = r * 0.055
-        ..shader = ui.Gradient.linear(
-          center.translate(-r, -r),
-          center.translate(r, r),
-          [
-            const Color(0xFF3E3E52),
-            const Color(0xFF1A1A26),
-            const Color(0xFF34344A),
-            const Color(0xFF15151F),
-          ],
-          [0.0, 0.4, 0.7, 1.0],
-        ),
-    );
-    // rivets on frame
-    final rivetPaint = Paint()..color = const Color(0xFF57576E);
-    final rivetHi = Paint()..color = const Color(0xFF8A8AA5);
-    for (int i = 0; i < 16; i++) {
-      final a = i * pi / 8;
-      final p = center + Offset(cos(a), sin(a)) * r * 0.90;
-      canvas.drawCircle(p, r * 0.014, rivetPaint);
-      canvas.drawCircle(
-          p.translate(-r * 0.004, -r * 0.004), r * 0.006, rivetHi);
-    }
-    // ornate spikes at cardinal points (gothic cross tips)
-    final spikePaint = Paint()..color = const Color(0xFF2C2C3E);
-    for (int i = 0; i < 4; i++) {
-      final a = i * pi / 2 - pi / 2;
-      final dir = Offset(cos(a), sin(a));
-      final normal = Offset(-dir.dy, dir.dx);
-      final base = center + dir * r * 0.925;
-      final tip = center + dir * r * 1.0;
-      final path = Path()
-        ..moveTo(base.dx + normal.dx * r * 0.035,
-            base.dy + normal.dy * r * 0.035)
-        ..lineTo(tip.dx, tip.dy)
-        ..lineTo(base.dx - normal.dx * r * 0.035,
-            base.dy - normal.dy * r * 0.035)
-        ..close();
-      canvas.drawPath(path, spikePaint);
-      canvas.drawCircle(center + dir * r * 0.975, r * 0.012,
-          Paint()..color = glowColor.withValues(alpha: 0.5 + pulse * 0.3));
+    // corner nails
+    final nail = Paint()..color = Colors.black.withValues(alpha: 0.45);
+    final nailR = frameW * 0.16;
+    for (final p in [
+      Offset(r.left + frameW / 2, r.top + frameW / 2),
+      Offset(r.right - frameW / 2, r.top + frameW / 2),
+      Offset(r.left + frameW / 2, r.bottom - frameW / 2),
+      Offset(r.right - frameW / 2, r.bottom - frameW / 2),
+    ]) {
+      canvas.drawCircle(p, nailR, nail);
     }
 
-    // ================= rotating rune ring =================
-    final runeRadius = r * 0.795;
-    for (int i = 0; i < _runes.length; i++) {
-      final a = -t * 0.15 + i * 2 * pi / _runes.length;
-      final lit = ((a % (2 * pi)) / (2 * pi)) < progress;
-      final tp = TextPainter(
-        text: TextSpan(
-          text: _runes[i],
-          style: TextStyle(
-            fontSize: r * 0.075,
-            color: lit
-                ? glowColor.withValues(alpha: 0.85)
-                : const Color(0xFF4A4A5E),
-            shadows: lit
-                ? [Shadow(color: glowColor, blurRadius: 8)]
-                : null,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      final pos = center + Offset(cos(a), sin(a)) * runeRadius;
-      canvas.save();
-      canvas.translate(pos.dx, pos.dy);
-      canvas.rotate(a + pi / 2);
-      tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
-      canvas.restore();
-    }
-
-    // ================= machine body =================
-    final body = Paint()
-      ..shader = ui.Gradient.radial(
-        center.translate(-r * 0.15, -r * 0.18),
-        r * 0.72,
-        [
-          const Color(0xFF232330),
-          const Color(0xFF15151E),
-          const Color(0xFF0C0C12),
+    // subtle top light
+    final light = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.white.withValues(alpha: 0.07),
+          Colors.transparent,
         ],
-        [0.0, 0.6, 1.0],
-      );
-    canvas.drawCircle(center, r * 0.70, body);
-    // inner rim with metallic sheen
-    canvas.drawCircle(
-      center,
-      r * 0.70,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = r * 0.016
-        ..shader = ui.Gradient.sweep(
-          center,
-          [
-            const Color(0xFF52526B),
-            const Color(0xFF23232F),
-            const Color(0xFF6A6A86),
-            const Color(0xFF23232F),
-            const Color(0xFF52526B),
-          ],
-          [0.0, 0.25, 0.5, 0.75, 1.0],
-        ),
+      ).createShader(Rect.fromLTWH(r.left, r.top, r.width, r.height * 0.4));
+    canvas.drawRect(
+        Rect.fromLTWH(r.left, r.top, r.width, r.height * 0.4), light);
+  }
+
+  // ---------------------------------------------------------------- paper
+
+  void _paintPaper(Canvas canvas, double w, double h) {
+    // Paper rises out of the platen as progress goes up.
+    final p = (progress / 100).clamp(0.0, 1.0);
+    final paperW = w * 0.34;
+    final maxRise = h * 0.24;
+    final rise = h * 0.045 + maxRise * p;
+
+    final platenY = h * 0.335;
+    final rect = Rect.fromLTWH(
+      w * 0.5 - paperW / 2,
+      platenY - rise,
+      paperW,
+      rise + h * 0.02,
     );
 
-    // faint radial panel lines inside body
-    final panelPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..color = Colors.white.withValues(alpha: 0.04);
-    for (int i = 0; i < 6; i++) {
-      final a = i * pi / 3 + 0.26;
-      canvas.drawLine(
-        center + Offset(cos(a), sin(a)) * r * 0.30,
-        center + Offset(cos(a), sin(a)) * r * 0.68,
-        panelPaint,
-      );
-    }
-
-    // ================= gears =================
-    // large background gear (counter-clockwise)
-    _drawGear(canvas, center, r * 0.56, 14, -t * 0.5,
-        const Color(0xFF262634), const Color(0xFF3A3A4E), r * 0.10);
-    // main gear (clockwise)
-    _drawGear(canvas, center, r * 0.40, 10, t, const Color(0xFF34344A),
-        const Color(0xFF4E4E68), r * 0.085);
-    // satellite gears
-    final sat1 = center + Offset(cos(-0.8), sin(-0.8)) * r * 0.47;
-    _drawGear(canvas, sat1, r * 0.14, 8, -t * 2.6, const Color(0xFF2C2C3E),
-        const Color(0xFF44445A), r * 0.045);
-    final sat2 = center + Offset(cos(2.5), sin(2.5)) * r * 0.50;
-    _drawGear(canvas, sat2, r * 0.10, 6, t * 3.4, const Color(0xFF29293A),
-        const Color(0xFF404056), r * 0.035);
-
-    // ================= energy core =================
-    final coreR = r * 0.185;
-    // outer aura
-    canvas.drawCircle(
-      center,
-      coreR * (1.25 + pulse * 0.15),
-      Paint()
-        ..color = glowColor
-            .withValues(alpha: holding || completed ? 0.35 : 0.15)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, coreR * 0.6),
+    final paper = Paint()..color = design.paper;
+    final rrect = RRect.fromRectAndCorners(
+      rect,
+      topLeft: const Radius.circular(2),
+      topRight: const Radius.circular(2),
     );
-    // core sphere
-    canvas.drawCircle(
-      center,
-      coreR,
+    // paper shadow
+    canvas.drawRRect(
+      rrect.shift(const Offset(2, 1)),
       Paint()
-        ..shader = ui.Gradient.radial(
-          center.translate(-coreR * 0.3, -coreR * 0.3),
-          coreR * 1.4,
-          [
-            Colors.white.withValues(
-                alpha: holding || completed ? 0.95 : 0.55),
-            glowColor.withValues(
-                alpha: holding || completed ? 0.85 : 0.4),
-            glowColor.withValues(alpha: 0.05),
-          ],
-          [0.0, 0.35, 1.0],
-        ),
+        ..color = Colors.black.withValues(alpha: 0.35)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
     );
-    // iris ring inside core
-    canvas.drawCircle(
-      center,
-      coreR * 0.62,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = r * 0.008
-        ..color = Colors.black.withValues(alpha: 0.5),
-    );
-    // rotating iris blades
-    final irisPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = r * 0.010
-      ..color = const Color(0xFF0C0C14).withValues(alpha: 0.85);
-    for (int i = 0; i < 6; i++) {
-      final a = t * 0.8 + i * pi / 3;
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: coreR * 0.62),
-        a,
-        pi / 5,
-        false,
-        irisPaint,
-      );
-    }
+    canvas.drawRRect(rrect, paper);
 
-    // ================= indicator lamps (progress thirds) =================
-    // 3 lamps arranged below the core, like IdentityV cipher lights
-    for (int i = 0; i < 3; i++) {
-      final lit = progress >= (i + 1) / 3 - 0.001;
-      final lx = center.dx + (i - 1) * r * 0.14;
-      final ly = center.dy + r * 0.335;
-      final lampC = Offset(lx, ly);
-      // socket
-      canvas.drawCircle(
-          lampC, r * 0.036, Paint()..color = const Color(0xFF0A0A10));
-      canvas.drawCircle(
-        lampC,
-        r * 0.036,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = r * 0.008
-          ..color = const Color(0xFF4A4A60),
-      );
-      // bulb
-      if (lit) {
-        canvas.drawCircle(
-          lampC,
-          r * 0.05,
-          Paint()
-            ..color = AppColors.amber.withValues(alpha: 0.45)
-            ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.04),
-        );
+    // typed cipher lines: amount follows progress
+    final linePaint = Paint()
+      ..color = design.ink.withValues(alpha: 0.75)
+      ..strokeWidth = max(1.2, h * 0.006)
+      ..strokeCap = StrokeCap.round;
+    final lineGap = h * 0.022;
+    final marginX = paperW * 0.12;
+    final usableTop = rect.top + h * 0.02;
+    final usableBottom = rect.bottom - h * 0.028;
+    final maxLines = ((usableBottom - usableTop) / lineGap).floor();
+    final rnd = Random(42);
+    for (int i = 0; i < maxLines; i++) {
+      final y = usableTop + i * lineGap;
+      // each line is a few dashes of varying width = typed cipher words
+      double x = rect.left + marginX;
+      final lineEnd = rect.right - marginX;
+      // last visible line may be partially typed while decoding
+      final isLast = i == maxLines - 1;
+      final fill = isLast && holding ? (t * 2) % 1.0 : 1.0;
+      final lineLimit = x + (lineEnd - x) * fill;
+      while (x < lineLimit) {
+        final seg = paperW * (0.06 + rnd.nextDouble() * 0.10);
+        final end = min(x + seg, lineLimit);
+        canvas.drawLine(Offset(x, y), Offset(end, y), linePaint);
+        x = end + paperW * 0.04;
       }
-      canvas.drawCircle(
-        lampC,
-        r * 0.024,
-        Paint()
-          ..color = lit
-              ? AppColors.amber
-              : const Color(0xFF2A2A38),
-      );
-    }
-
-    // ================= progress ring =================
-    final ringRect = Rect.fromCircle(center: center, radius: r * 0.955);
-    // tick marks
-    final tickPaint = Paint()..strokeWidth = r * 0.006;
-    for (int i = 0; i < 60; i++) {
-      final a = -pi / 2 + i * pi / 30;
-      final frac = i / 60;
-      final lit = frac <= progress;
-      tickPaint.color = lit
-          ? glowColor.withValues(alpha: 0.8)
-          : Colors.white.withValues(alpha: 0.10);
-      final inner = r * (i % 5 == 0 ? 0.915 : 0.93);
-      canvas.drawLine(
-        center + Offset(cos(a), sin(a)) * inner,
-        center + Offset(cos(a), sin(a)) * r * 0.955,
-        tickPaint,
-      );
-    }
-    // track
-    canvas.drawArc(
-      ringRect,
-      -pi / 2,
-      2 * pi,
-      false,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = r * 0.040
-        ..color = Colors.white.withValues(alpha: 0.06),
-    );
-    // fill
-    if (progress > 0) {
-      canvas.drawArc(
-        ringRect,
-        -pi / 2,
-        2 * pi * progress,
-        false,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round
-          ..strokeWidth = r * 0.040
-          ..shader = SweepGradient(
-            startAngle: -pi / 2,
-            endAngle: 3 * pi / 2,
-            colors: [glowColor.withValues(alpha: 0.55), glowColor],
-            transform: const GradientRotation(-pi / 2),
-          ).createShader(ringRect),
-      );
-      // leading comet head
-      final ang = -pi / 2 + 2 * pi * progress;
-      final dot = center + Offset(cos(ang), sin(ang)) * r * 0.955;
-      canvas.drawCircle(
-        dot,
-        r * 0.045,
-        Paint()
-          ..color = glowColor.withValues(alpha: 0.55)
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.04),
-      );
-      canvas.drawCircle(dot, r * 0.018, Paint()..color = Colors.white);
-    }
-
-    // ================= electric arcs while holding =================
-    if (holding && !completed) {
-      final rand = Random((wall * 30).floor());
-      for (int i = 0; i < (spark ? 5 : 3); i++) {
-        final a0 = rand.nextDouble() * 2 * pi;
-        final path = Path();
-        var p = center + Offset(cos(a0), sin(a0)) * coreR;
-        path.moveTo(p.dx, p.dy);
-        for (int s = 0; s < 5; s++) {
-          final rr = r * (0.22 + 0.46 * (s + 1) / 5);
-          final aa = a0 + (rand.nextDouble() - 0.5) * 0.9;
-          p = center + Offset(cos(aa), sin(aa)) * rr;
-          path.lineTo(p.dx, p.dy);
-        }
-        // glow pass + core pass
-        canvas.drawPath(
-          path,
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 3.5
-            ..color = glowColor.withValues(alpha: 0.25)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
-        );
-        canvas.drawPath(
-          path,
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.4
-            ..color = Colors.white.withValues(alpha: 0.75),
-        );
-      }
-
-      // spark particles flying off the ring head
-      final ang = -pi / 2 + 2 * pi * progress;
-      final head = center + Offset(cos(ang), sin(ang)) * r * 0.955;
-      for (int i = 0; i < 6; i++) {
-        final sa = rand.nextDouble() * 2 * pi;
-        final sd = rand.nextDouble() * r * 0.09;
-        canvas.drawCircle(
-          head + Offset(cos(sa), sin(sa)) * sd,
-          rand.nextDouble() * r * 0.010 + 1,
-          Paint()
-            ..color =
-                glowColor.withValues(alpha: 0.4 + rand.nextDouble() * 0.5),
-        );
-      }
-    }
-
-    // ================= completed: golden shimmer sweep =================
-    if (completed) {
-      final sweepA = wall * 0.7;
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: r * 0.70),
-        sweepA,
-        pi / 3,
-        true,
-        Paint()
-          ..shader = ui.Gradient.sweep(
-            center,
-            [
-              Colors.transparent,
-              AppColors.amber.withValues(alpha: 0.10),
-              Colors.transparent,
-            ],
-            [0.0, 0.5, 1.0],
-            TileMode.clamp,
-            sweepA,
-            sweepA + pi / 3,
-          ),
-      );
     }
   }
 
-  void _drawGear(Canvas canvas, Offset center, double radius, int teeth,
-      double rotation, Color color, Color hiColor, double toothLen) {
-    // metallic body gradient
-    final paint = Paint()
-      ..shader = ui.Gradient.linear(
-        center.translate(-radius, -radius),
-        center.translate(radius, radius),
-        [hiColor, color, Color.lerp(color, Colors.black, 0.35)!],
-        [0.0, 0.5, 1.0],
+  // ---------------------------------------------------------------- platen
+
+  void _paintPlaten(Canvas canvas, double w, double h) {
+    // roller cylinder across the top of the body
+    final rect = Rect.fromLTWH(w * 0.245, h * 0.315, w * 0.51, h * 0.05);
+    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(rect.height / 2));
+
+    final roller = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          design.platen.withValues(alpha: 0.85),
+          design.platen,
+          Colors.black.withValues(alpha: 0.9),
+        ],
+      ).createShader(rect);
+    canvas.drawRRect(rrect, roller);
+
+    // platen knobs on both ends
+    final knob = Paint()..color = design.bodyDark;
+    final knobR = rect.height * 0.62;
+    canvas.drawCircle(Offset(rect.left - knobR * 0.4, rect.center.dy), knobR, knob);
+    canvas.drawCircle(Offset(rect.right + knobR * 0.4, rect.center.dy), knobR, knob);
+    // knob highlight rings
+    final ring = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..color = design.bodyLight.withValues(alpha: 0.5);
+    canvas.drawCircle(
+        Offset(rect.left - knobR * 0.4, rect.center.dy), knobR * 0.55, ring);
+    canvas.drawCircle(
+        Offset(rect.right + knobR * 0.4, rect.center.dy), knobR * 0.55, ring);
+  }
+
+  // ---------------------------------------------------------------- body
+
+  void _paintBody(Canvas canvas, Rect r, double w, double h) {
+    // main shell with slightly rounded top corners
+    final shell = RRect.fromRectAndCorners(
+      r,
+      topLeft: Radius.circular(r.width * 0.06),
+      topRight: Radius.circular(r.width * 0.06),
+    );
+    final body = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [design.bodyLight, design.body, design.bodyDark],
+        stops: const [0.0, 0.45, 1.0],
+      ).createShader(r);
+    canvas.drawRRect(shell, body);
+
+    // type bar basket: dark半円 behind the platen opening
+    final basketCenter = Offset(r.center.dx, r.top + r.height * 0.10);
+    final basketR = r.width * 0.17;
+    canvas.drawArc(
+      Rect.fromCircle(center: basketCenter, radius: basketR),
+      pi,
+      pi,
+      true,
+      Paint()..color = Colors.black.withValues(alpha: 0.55),
+    );
+    // type bars (thin rods fanning into the basket); one bar strikes while holding
+    final barPaint = Paint()
+      ..strokeWidth = max(1.0, w * 0.004)
+      ..color = design.dial.withValues(alpha: 0.7);
+    const barCount = 9;
+    final strikeIndex = (t * barCount * 2).floor() % barCount;
+    for (int i = 0; i < barCount; i++) {
+      final a = pi + pi * (i + 0.5) / barCount;
+      final isStriking = holding && i == strikeIndex;
+      final len = basketR * (isStriking ? 0.95 : 0.62);
+      final from = Offset(
+        basketCenter.dx + cos(a) * basketR * 0.25,
+        basketCenter.dy + sin(a) * basketR * 0.25,
       );
-    final path = Path();
-    for (int i = 0; i < teeth; i++) {
-      final a = rotation + i * 2 * pi / teeth;
-      final aNext = rotation + (i + 1) * 2 * pi / teeth;
-      final aMid1 = a + (aNext - a) * 0.25;
-      final aMid2 = a + (aNext - a) * 0.5;
-      final outer = radius + toothLen;
-      if (i == 0) {
-        path.moveTo(center.dx + radius * cos(a), center.dy + radius * sin(a));
-      }
-      path.lineTo(center.dx + outer * cos(a + (aNext - a) * 0.08),
-          center.dy + outer * sin(a + (aNext - a) * 0.08));
-      path.lineTo(
-          center.dx + outer * cos(aMid1), center.dy + outer * sin(aMid1));
-      path.lineTo(
-          center.dx + radius * cos(aMid2), center.dy + radius * sin(aMid2));
-      path.lineTo(
-          center.dx + radius * cos(aNext), center.dy + radius * sin(aNext));
+      final to = Offset(
+        basketCenter.dx + cos(a) * len,
+        basketCenter.dy + sin(a) * len,
+      );
+      canvas.drawLine(from, to, barPaint);
     }
-    path.close();
-    canvas.drawPath(path, paint);
-    // subtle top-edge highlight
-    canvas.drawPath(
-      path,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 0.8
-        ..color = hiColor.withValues(alpha: 0.35),
+
+    // front face panel line
+    final panel = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0
+      ..color = Colors.black.withValues(alpha: 0.3);
+    canvas.drawLine(
+      Offset(r.left + r.width * 0.06, r.top + r.height * 0.52),
+      Offset(r.right - r.width * 0.06, r.top + r.height * 0.52),
+      panel,
     );
 
-    // gear hole
+    // maker's plate (small emblem)
+    final plateRect = Rect.fromCenter(
+      center: Offset(r.center.dx, r.top + r.height * 0.40),
+      width: r.width * 0.20,
+      height: r.height * 0.10,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(plateRect, const Radius.circular(2)),
+      Paint()..color = design.dial.withValues(alpha: 0.35),
+    );
+  }
+
+  // -------------------------------------------------------- carriage lever
+
+  void _paintCarriageLever(Canvas canvas, double w, double h) {
+    // return lever sticking out on the left of the platen
+    final base = Offset(w * 0.215, h * 0.34);
+    final lever = Paint()
+      ..strokeWidth = max(2.0, w * 0.008)
+      ..strokeCap = StrokeCap.round
+      ..color = design.bodyDark;
+    canvas.drawLine(base, Offset(base.dx - w * 0.045, base.dy - h * 0.045), lever);
     canvas.drawCircle(
-        center, radius * 0.35, Paint()..color = const Color(0xFF0E0E16));
+      Offset(base.dx - w * 0.045, base.dy - h * 0.045),
+      w * 0.011,
+      Paint()..color = design.dial,
+    );
+  }
+
+  // ---------------------------------------------------------------- dial
+
+  void _paintDial(Canvas canvas, double w, double h) {
+    // side wheel like the reference image (left side of the body)
+    final c = Offset(w * 0.175, h * 0.475);
+    final rOuter = w * 0.052;
+
     canvas.drawCircle(
-      center,
-      radius * 0.35,
+        c, rOuter, Paint()..color = design.bodyDark);
+    canvas.drawCircle(
+      c,
+      rOuter,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = radius * 0.05
-        ..color = hiColor.withValues(alpha: 0.4),
+        ..strokeWidth = max(1.5, w * 0.006)
+        ..color = design.dial,
     );
-    // spokes
+    // spokes - rotate slowly while decoding
+    final spin = holding ? t * 2 * pi : 0.0;
     final spoke = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = radius * 0.09
-      ..color = color;
+      ..strokeWidth = max(1.2, w * 0.005)
+      ..color = design.dial.withValues(alpha: 0.85);
     for (int i = 0; i < 3; i++) {
-      final a = rotation + i * 2 * pi / 3;
+      final a = spin + pi * i / 3;
       canvas.drawLine(
-        center + Offset(cos(a), sin(a)) * radius * 0.35,
-        center + Offset(cos(a), sin(a)) * radius * 0.9,
+        Offset(c.dx + cos(a) * rOuter * 0.8, c.dy + sin(a) * rOuter * 0.8),
+        Offset(c.dx - cos(a) * rOuter * 0.8, c.dy - sin(a) * rOuter * 0.8),
         spoke,
       );
     }
-    // hub bolt
-    canvas.drawCircle(
-        center, radius * 0.10, Paint()..color = hiColor.withValues(alpha: 0.7));
+    canvas.drawCircle(c, rOuter * 0.18, Paint()..color = design.dial);
+  }
+
+  // -------------------------------------------------------------- keyboard
+
+  void _paintKeyboard(Canvas canvas, double w, double h) {
+    // 3 staggered rows of round keys on the sloped front
+    const rows = 3;
+    const keysPerRow = [10, 9, 8];
+    final keyR = w * 0.021;
+
+    for (int row = 0; row < rows; row++) {
+      final count = keysPerRow[row];
+      final y = h * (0.512 + row * 0.030);
+      final rowWidth = w * (0.46 - row * 0.03);
+      final startX = w * 0.5 - rowWidth / 2;
+      for (int i = 0; i < count; i++) {
+        final x = startX + rowWidth * i / (count - 1);
+
+        // per-key press animation while holding (pseudo random pattern)
+        double press = 0;
+        if (holding) {
+          final phase = (t * 3 + _rand.nextDouble()) % 1.0;
+          if (phase < 0.12) press = 1 - phase / 0.12;
+        }
+        final dy = press * h * 0.006;
+
+        final center = Offset(x, y + dy);
+        // key stem
+        canvas.drawLine(
+          Offset(x, y + keyR * 0.4),
+          Offset(x, y + keyR * 1.1),
+          Paint()
+            ..strokeWidth = max(1.0, w * 0.004)
+            ..color = Colors.black.withValues(alpha: 0.5),
+        );
+        // cap shadow ring
+        canvas.drawCircle(
+          center,
+          keyR,
+          Paint()..color = Colors.black.withValues(alpha: 0.45),
+        );
+        // cap
+        canvas.drawCircle(
+          center.translate(0, -keyR * 0.12),
+          keyR * 0.92,
+          Paint()..color = design.keyCap,
+        );
+        // metal rim
+        canvas.drawCircle(
+          center.translate(0, -keyR * 0.12),
+          keyR * 0.92,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.0
+            ..color = design.dial.withValues(alpha: 0.7),
+        );
+        // legend dot (too small for real letters at this scale)
+        canvas.drawCircle(
+          center.translate(0, -keyR * 0.12),
+          keyR * 0.22,
+          Paint()..color = design.keyLegend.withValues(alpha: 0.75),
+        );
+      }
+    }
+
+    // space bar
+    final spaceRect = Rect.fromCenter(
+      center: Offset(w * 0.5, h * 0.512 + 3 * h * 0.030),
+      width: w * 0.22,
+      height: h * 0.016,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(spaceRect, Radius.circular(spaceRect.height / 2)),
+      Paint()..color = design.keyCap,
+    );
+  }
+
+  // ---------------------------------------------------------------- lamp
+
+  void _paintLamp(Canvas canvas, double w, double h) {
+    // indicator lamp on the body's top-right corner
+    final c = Offset(w * 0.755, h * 0.365);
+    final r = w * 0.016;
+
+    Color color;
+    double glow;
+    if (completed) {
+      color = design.lampDone;
+      glow = 0.9;
+    } else if (holding) {
+      color = design.lampActive;
+      glow = 0.55 + 0.35 * (0.5 + 0.5 * sin(t * 2 * pi * 2));
+    } else {
+      color = design.lampActive;
+      glow = 0.12;
+    }
+
+    if (glow > 0.2) {
+      canvas.drawCircle(
+        c,
+        r * 3.2,
+        Paint()
+          ..color = color.withValues(alpha: glow * 0.30)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+      );
+    }
+    canvas.drawCircle(c, r * 1.25, Paint()..color = design.bodyDark);
+    canvas.drawCircle(c, r, Paint()..color = color.withValues(alpha: 0.25 + glow * 0.75));
   }
 
   @override
-  bool shouldRepaint(covariant _MachinePainter old) => true;
+  bool shouldRepaint(covariant _MachinePainter old) =>
+      old.progress != progress ||
+      old.holding != holding ||
+      old.completed != completed ||
+      old.design != design ||
+      old.t != t;
 }
