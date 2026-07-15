@@ -1,15 +1,39 @@
 import 'package:flutter/material.dart';
 
-/// Visual design preset for the cipher machine.
+/// Structural type of the cipher machine.
 ///
-/// The machine itself is always the same "antique typewriter on a wooden
-/// crate" silhouette (Identity V style); each preset only swaps materials:
-/// body metal, crate wood, key caps, paper and lamp colors.
+/// Unlike the old presets (same silhouette, different colors), each style
+/// is drawn by a completely different CustomPainter with its own shape,
+/// mechanics and animation.
+enum MachineStyle {
+  /// Antique typewriter on a wooden crate - the Identity V reference look.
+  typewriter,
+
+  /// Enigma-style rotor cipher box: open lid, 3 rotors, lamp board, plugs.
+  rotor,
+
+  /// Telegraph station: morse key, spark coils and punched paper tape.
+  telegraph,
+
+  /// Steampunk gear engine: meshing gears, pressure gauge, steam pipes.
+  gearwork,
+
+  /// Astronomical clock cabinet: swinging pendulum and star-chart dial.
+  horologe,
+}
+
+/// Visual design definition for one machine style.
+///
+/// [style] decides the painter (the whole silhouette); the color fields
+/// are that painter's material palette.
 ///
 /// Keep the keys in sync with server/store.py VALID_DESIGNS.
 class MachineDesign {
   /// Stable key stored on the server (e.g. "classic").
   final String key;
+
+  /// Which painter draws this machine.
+  final MachineStyle style;
 
   /// Japanese display name for the dashboard.
   final String label;
@@ -17,175 +41,172 @@ class MachineDesign {
   /// Short description shown in the design picker.
   final String description;
 
-  // ---- machine body (typewriter) ----
-  /// Main body metal color (upper shell).
-  final Color body;
+  // ---- generic palette (interpreted by each painter) ----
+  /// Main body / chassis color.
+  final Color base;
 
-  /// Darker shade of the body (sides / shadowed faces).
-  final Color bodyDark;
+  /// Darker shade (shadowed faces).
+  final Color baseDark;
 
-  /// Lighter shade of the body (top highlights).
-  final Color bodyLight;
+  /// Lighter shade (top highlights).
+  final Color baseLight;
 
-  /// Key caps color.
-  final Color keyCap;
+  /// Metal trim / dial / mechanical accent.
+  final Color accent;
 
-  /// Key cap legend (letter) color.
-  final Color keyLegend;
+  /// Darker accent (recesses in the metalwork).
+  final Color accentDark;
 
-  /// Platen (roller) color.
-  final Color platen;
-
-  /// Paper sheet color.
+  /// Paper / tape sheet color.
   final Color paper;
 
-  /// Small dial / wheel accent color on the body.
-  final Color dial;
+  /// Ink on the paper (typed cipher, progress marks).
+  final Color ink;
 
-  // ---- crate (wooden box under the machine) ----
-  /// Crate plank base color.
-  final Color crate;
-
-  /// Crate plank dark edge / cross brace color.
-  final Color crateDark;
-
-  // ---- lights ----
-  /// Indicator lamp color while decoding.
+  /// Indicator lamp while decoding.
   final Color lampActive;
 
-  /// Indicator lamp color when completed.
+  /// Indicator lamp when completed.
   final Color lampDone;
 
-  /// Progress ink color (progress bar on the paper).
-  final Color ink;
+  /// Wooden stand / crate / desk color.
+  final Color wood;
+
+  /// Dark wood edges / braces.
+  final Color woodDark;
 
   const MachineDesign({
     required this.key,
+    required this.style,
     required this.label,
     required this.description,
-    required this.body,
-    required this.bodyDark,
-    required this.bodyLight,
-    required this.keyCap,
-    required this.keyLegend,
-    required this.platen,
+    required this.base,
+    required this.baseDark,
+    required this.baseLight,
+    required this.accent,
+    required this.accentDark,
     required this.paper,
-    required this.dial,
-    required this.crate,
-    required this.crateDark,
+    required this.ink,
     required this.lampActive,
     required this.lampDone,
-    required this.ink,
+    required this.wood,
+    required this.woodDark,
   });
 }
 
-/// The 5 selectable presets. Order defines display order in the picker.
+/// The 5 selectable machines. Order defines display order in the picker.
 const List<MachineDesign> kMachineDesigns = [
-  // 1. Classic black iron typewriter on dark oak - the reference image look.
+  // 1. Reference image look: black iron typewriter on a dark oak crate.
   MachineDesign(
     key: 'classic',
-    label: 'クラシック',
-    description: '黒鉄のタイプライター。定番の姿。',
-    body: Color(0xFF35322E),
-    bodyDark: Color(0xFF211F1C),
-    bodyLight: Color(0xFF4C4842),
-    keyCap: Color(0xFF171614),
-    keyLegend: Color(0xFFCFC9B8),
-    platen: Color(0xFF141312),
+    style: MachineStyle.typewriter,
+    label: 'タイプライター',
+    description: '黒鉄のアンティークタイプライター。定番の暗号機。',
+    base: Color(0xFF35322E),
+    baseDark: Color(0xFF211F1C),
+    baseLight: Color(0xFF4C4842),
+    accent: Color(0xFF8A8378),
+    accentDark: Color(0xFF171614),
     paper: Color(0xFFE8E2D0),
-    dial: Color(0xFF8A8378),
-    crate: Color(0xFF4A3C2E),
-    crateDark: Color(0xFF32281D),
+    ink: Color(0xFF3A3630),
     lampActive: Color(0xFFD9A441),
     lampDone: Color(0xFF7FB069),
-    ink: Color(0xFFD9A441),
+    wood: Color(0xFF4A3C2E),
+    woodDark: Color(0xFF32281D),
   ),
 
-  // 2. Mahogany & cream - warm wooden body like an old radio.
+  // 2. Enigma-style rotor box: navy steel in a walnut case, brass rotors.
   MachineDesign(
-    key: 'mahogany',
-    label: 'マホガニー',
-    description: '赤茶の木目とクリーム色の鍵盤。',
-    body: Color(0xFF5C3226),
-    bodyDark: Color(0xFF3D2018),
-    bodyLight: Color(0xFF7A4634),
-    keyCap: Color(0xFFE3D9BE),
-    keyLegend: Color(0xFF4A3222),
-    platen: Color(0xFF2A1B14),
-    paper: Color(0xFFF0EAD8),
-    dial: Color(0xFFC8A96A),
-    crate: Color(0xFF6B4B33),
-    crateDark: Color(0xFF4A3220),
-    lampActive: Color(0xFFE0B054),
-    lampDone: Color(0xFF8DBB74),
-    ink: Color(0xFF9C4A3A),
-  ),
-
-  // 3. Military olive - field cipher unit, WW2 mood.
-  MachineDesign(
-    key: 'military',
-    label: 'ミリタリー',
-    description: '野戦仕様のオリーブ色の暗号機。',
-    body: Color(0xFF4A4E38),
-    bodyDark: Color(0xFF2F3324),
-    bodyLight: Color(0xFF636A4C),
-    keyCap: Color(0xFF23261B),
-    keyLegend: Color(0xFFD5D2B8),
-    platen: Color(0xFF1B1D15),
-    paper: Color(0xFFDCD8C0),
-    dial: Color(0xFF9A9878),
-    crate: Color(0xFF54513B),
-    crateDark: Color(0xFF383626),
-    lampActive: Color(0xFFC9B458),
-    lampDone: Color(0xFF86A65C),
-    ink: Color(0xFF7C8354),
-  ),
-
-  // 4. Brass & copper - polished steampunk laboratory instrument.
-  MachineDesign(
-    key: 'brass',
-    label: 'ブラス',
-    description: '真鍮と銅の輝く実験装置。',
-    body: Color(0xFF8A6B3A),
-    bodyDark: Color(0xFF5E4726),
-    bodyLight: Color(0xFFB08D4E),
-    keyCap: Color(0xFF3C2E1A),
-    keyLegend: Color(0xFFE8D9A8),
-    platen: Color(0xFF4A3520),
-    paper: Color(0xFFF2E9CE),
-    dial: Color(0xFFD8B76A),
-    crate: Color(0xFF5C4630),
-    crateDark: Color(0xFF3E2F1F),
+    key: 'rotor',
+    style: MachineStyle.rotor,
+    label: 'ローターマシン',
+    description: '3連ローターが回る、エニグマ式の回転暗号機。',
+    base: Color(0xFF2E3440),
+    baseDark: Color(0xFF1C2129),
+    baseLight: Color(0xFF434C5E),
+    accent: Color(0xFFC8A35A),
+    accentDark: Color(0xFF6E5526),
+    paper: Color(0xFFEDE7D4),
+    ink: Color(0xFF2C3542),
     lampActive: Color(0xFFE8C05C),
-    lampDone: Color(0xFF9CBC6E),
-    ink: Color(0xFFB0803A),
+    lampDone: Color(0xFF8DBB74),
+    wood: Color(0xFF5C4630),
+    woodDark: Color(0xFF3E2F1F),
   ),
 
-  // 5. Noir - almost monochrome, pale grey like the reference sketch.
+  // 3. Telegraph station: warm walnut desk, brass key, copper coils.
   MachineDesign(
-    key: 'noir',
-    label: 'ノワール',
-    description: '灰白のモノトーン。素描のような静けさ。',
-    body: Color(0xFF6E6E70),
-    bodyDark: Color(0xFF4A4A4C),
-    bodyLight: Color(0xFF919194),
-    keyCap: Color(0xFF2E2E30),
-    keyLegend: Color(0xFFD8D8DA),
-    platen: Color(0xFF252527),
-    paper: Color(0xFFEDEDEA),
-    dial: Color(0xFFAAAAAC),
-    crate: Color(0xFF5A5654),
-    crateDark: Color(0xFF3C3937),
-    lampActive: Color(0xFFC8C0A8),
+    key: 'telegraph',
+    style: MachineStyle.telegraph,
+    label: '電信機',
+    description: 'モールス電鍵と紙テープ。火花散る旧式電信機。',
+    base: Color(0xFF4E3A28),
+    baseDark: Color(0xFF332518),
+    baseLight: Color(0xFF6B503A),
+    accent: Color(0xFFB98A4A),
+    accentDark: Color(0xFF5E4726),
+    paper: Color(0xFFF0EAD8),
+    ink: Color(0xFF4A3222),
+    lampActive: Color(0xFFE0B054),
+    lampDone: Color(0xFF86A65C),
+    wood: Color(0xFF6B4B33),
+    woodDark: Color(0xFF4A3220),
+  ),
+
+  // 4. Steampunk gear engine: bronze gears in an iron frame, steam pipes.
+  MachineDesign(
+    key: 'gearwork',
+    style: MachineStyle.gearwork,
+    label: '歯車機関',
+    description: '巨大な歯車が噛み合う蒸気仕掛けの解読機関。',
+    base: Color(0xFF3A3633),
+    baseDark: Color(0xFF242220),
+    baseLight: Color(0xFF524D48),
+    accent: Color(0xFFA87838),
+    accentDark: Color(0xFF6B4A20),
+    paper: Color(0xFFEAE2CC),
+    ink: Color(0xFF5A4630),
+    lampActive: Color(0xFFE8A03C),
+    lampDone: Color(0xFF9CBC6E),
+    wood: Color(0xFF443528),
+    woodDark: Color(0xFF2E2318),
+  ),
+
+  // 5. Astronomical clock: ebony cabinet, gold star dial, pale pendulum.
+  MachineDesign(
+    key: 'horologe',
+    style: MachineStyle.horologe,
+    label: '天文時計',
+    description: '振り子が時を刻む、星図盤付きの天文時計。',
+    base: Color(0xFF2B2430),
+    baseDark: Color(0xFF191521),
+    baseLight: Color(0xFF3F3548),
+    accent: Color(0xFFC9B458),
+    accentDark: Color(0xFF6E6230),
+    paper: Color(0xFFEDEDE4),
+    ink: Color(0xFF3E3850),
+    lampActive: Color(0xFFB8A8E0),
     lampDone: Color(0xFF9CB894),
-    ink: Color(0xFF8E8E90),
+    wood: Color(0xFF3A2E3E),
+    woodDark: Color(0xFF261E2A),
   ),
 ];
 
-/// Look up a design by key; unknown keys fall back to the first (classic).
+/// Legacy keys from the old color-swap presets -> new structural designs.
+/// Machines created before the redesign keep working without data loss.
+const Map<String, String> kLegacyDesignKeys = {
+  'mahogany': 'rotor',
+  'military': 'telegraph',
+  'brass': 'gearwork',
+  'noir': 'horologe',
+};
+
+/// Look up a design by key; legacy keys are migrated, unknown keys fall
+/// back to the first design (classic typewriter).
 MachineDesign machineDesignByKey(String key) {
+  final resolved = kLegacyDesignKeys[key] ?? key;
   for (final d in kMachineDesigns) {
-    if (d.key == key) return d;
+    if (d.key == resolved) return d;
   }
   return kMachineDesigns.first;
 }
