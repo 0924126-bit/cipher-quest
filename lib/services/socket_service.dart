@@ -32,6 +32,11 @@ class SocketService {
 
   void connect() {
     if (_closed) return;
+    // clean up any previous attempt before reconnecting
+    _sub?.cancel();
+    try {
+      _channel?.sink.close();
+    } catch (_) {}
     try {
       _channel = WebSocketChannel.connect(Uri.parse(_wsUrl));
       _sub = _channel!.stream.listen(
@@ -58,8 +63,10 @@ class SocketService {
   }
 
   void _onDisconnect() {
-    if (_connected) {
-      _connected = false;
+    _connected = false;
+    // Always notify listeners, even when the very first attempt failed.
+    // Without this the decoder page could hang on "connecting" forever.
+    if (!_closed) {
       _statusController.add(false);
     }
     _pingTimer?.cancel();
