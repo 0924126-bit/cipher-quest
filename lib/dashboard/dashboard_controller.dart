@@ -82,15 +82,30 @@ class DashboardController extends ChangeNotifier {
   int get onlineCount => machines.where((m) => m.connected).length;
 
   // ---------- CRUD ----------
-  Future<void> createMachine(String name, int durationSec) async {
-    await ApiService.instance
-        .createMachine(name: name, durationSec: durationSec);
+  Future<void> createMachine(
+    String name,
+    int durationSec, {
+    String design = 'classic',
+  }) async {
+    await ApiService.instance.createMachine(
+      name: name,
+      durationSec: durationSec,
+      design: design,
+    );
   }
 
-  Future<void> updateMachine(String id,
-      {String? name, int? durationSec}) async {
-    await ApiService.instance
-        .updateMachine(id, name: name, durationSec: durationSec);
+  Future<void> updateMachine(
+    String id, {
+    String? name,
+    int? durationSec,
+    String? design,
+  }) async {
+    await ApiService.instance.updateMachine(
+      id,
+      name: name,
+      durationSec: durationSec,
+      design: design,
+    );
   }
 
   Future<void> deleteMachine(String id) async {
