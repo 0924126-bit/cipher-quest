@@ -6,6 +6,7 @@ import 'dashboard_controller.dart';
 import 'game_panel.dart';
 import 'widgets/dialogs.dart';
 import 'widgets/machine_card.dart';
+import 'widgets/sound_panel.dart';
 
 /// Operator dashboard: Google-style minimal UI with live machine grid,
 /// overall stats, event feed, and machine CRUD.
@@ -39,6 +40,16 @@ class _DashboardPageState extends State<DashboardPage> {
       result.durationSec,
       design: result.design,
     );
+    // machine id is assigned server-side; rhythm settings ride on update
+    final created = _ctrl.machines.isEmpty ? null : _ctrl.machines.last;
+    if (created != null) {
+      await _ctrl.updateMachine(
+        created.id,
+        rhythmEnabled: result.rhythmEnabled,
+        rhythmSuccessBonus: result.rhythmSuccessBonus,
+        rhythmFailPenalty: result.rhythmFailPenalty,
+      );
+    }
   }
 
   Future<void> _editMachine(Machine m) async {
@@ -49,6 +60,9 @@ class _DashboardPageState extends State<DashboardPage> {
       name: result.name,
       durationSec: result.durationSec,
       design: result.design,
+      rhythmEnabled: result.rhythmEnabled,
+      rhythmSuccessBonus: result.rhythmSuccessBonus,
+      rhythmFailPenalty: result.rhythmFailPenalty,
     );
   }
 
@@ -165,7 +179,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             crossAxisCount: cols,
                             mainAxisSpacing: 16,
                             crossAxisSpacing: 16,
-                            mainAxisExtent: 196,
+                            mainAxisExtent: 240,
                           ),
                           delegate: SliverChildBuilderDelegate(
                             (context, i) {
@@ -178,6 +192,9 @@ class _DashboardPageState extends State<DashboardPage> {
                                 onReset: () => _ctrl.resetMachine(m.id),
                                 onDelete: () => _deleteMachine(m),
                                 onOpen: () => _openMachine(m),
+                                onSpeedNudge: (d) =>
+                                    _ctrl.nudgeSpeed(m.id, d),
+                                onSpeedReset: () => _ctrl.resetSpeed(m.id),
                               );
                             },
                             childCount: _ctrl.machines.length,
@@ -186,6 +203,14 @@ class _DashboardPageState extends State<DashboardPage> {
                       },
                     ),
                   ),
+
+                // ---- sound (mp3) management ----
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                    child: SoundPanel(ctrl: _ctrl),
+                  ),
+                ),
 
                 // ---- 3D game admin panel ----
                 const SliverToBoxAdapter(
@@ -492,6 +517,12 @@ class _EventFeed extends StatelessWidget {
         return Icons.restart_alt;
       case 'skill_miss':
         return Icons.flash_on;
+      case 'rhythm_success':
+        return Icons.music_note;
+      case 'speed':
+        return Icons.speed;
+      case 'sound':
+        return Icons.library_music;
       default:
         return Icons.info_outline;
     }
@@ -506,6 +537,11 @@ class _EventFeed extends StatelessWidget {
       case 'disconnected':
       case 'skill_miss':
         return AppColors.dashAmber;
+      case 'rhythm_success':
+        return AppColors.dashGreen;
+      case 'speed':
+      case 'sound':
+        return AppColors.dashBlue;
       case 'deleted':
         return AppColors.dashRed;
       default:
