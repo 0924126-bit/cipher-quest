@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../models/machine.dart';
+import '../models/sound_asset.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
 
@@ -11,6 +12,7 @@ import '../services/socket_service.dart';
 class DashboardController extends ChangeNotifier {
   List<Machine> machines = [];
   List<MachineEvent> events = [];
+  List<SoundAsset> sounds = [];
   bool allCompleted = false;
   bool connected = false;
   bool loading = true;
@@ -42,6 +44,15 @@ class DashboardController extends ChangeNotifier {
       error = '$e';
       notifyListeners();
     }
+    // sounds are non-critical; load separately
+    refreshSounds();
+  }
+
+  Future<void> refreshSounds() async {
+    try {
+      sounds = await ApiService.instance.listSounds();
+      notifyListeners();
+    } catch (_) {}
   }
 
   void _onMessage(Map<String, dynamic> msg) {
@@ -67,6 +78,10 @@ class DashboardController extends ChangeNotifier {
         events.insert(0, ev);
         if (events.length > 60) events = events.sublist(0, 60);
         notifyListeners();
+        break;
+      case 'sounds':
+        // sound roles changed somewhere -> refresh the list
+        refreshSounds();
         break;
     }
   }
@@ -99,13 +114,50 @@ class DashboardController extends ChangeNotifier {
     String? name,
     int? durationSec,
     String? design,
+    bool? rhythmEnabled,
+    double? rhythmSuccessBonus,
+    double? rhythmFailPenalty,
   }) async {
     await ApiService.instance.updateMachine(
       id,
       name: name,
       durationSec: durationSec,
       design: design,
+      rhythmEnabled: rhythmEnabled,
+      rhythmSuccessBonus: rhythmSuccessBonus,
+      rhythmFailPenalty: rhythmFailPenalty,
     );
+  }
+
+  /// Live decode-speed nudge from the machine card (+/-10% etc).
+  Future<void> nudgeSpeed(String id, double deltaPercent) async {
+    await ApiService.instance.nudgeMachineSpeed(id, deltaPercent);
+  }
+
+  /// Reset decode speed to 100%.
+  Future<void> resetSpeed(String id) async {
+    await ApiService.instance.setMachineSpeed(id, 1.0);
+  }
+
+  // ---------- sound assets ----------
+  Future<void> uploadSound({
+    required String filename,
+    required List<int> bytes,
+    String role = 'none',
+  }) async {
+    await ApiService.instance
+        .uploadSound(filename: filename, bytes: bytes, role: role);
+    await refreshSounds();
+  }
+
+  Future<void> setSoundRole(String id, String role) async {
+    await ApiService.instance.setSoundRole(id, role);
+    await refreshSounds();
+  }
+
+  Future<void> deleteSound(String id) async {
+    await ApiService.instance.deleteSound(id);
+    await refreshSounds();
   }
 
   Future<void> deleteMachine(String id) async {
