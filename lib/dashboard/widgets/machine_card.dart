@@ -15,6 +15,10 @@ class MachineCard extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onOpen;
 
+  /// Live decode-speed nudges (+/- percent points) and reset to 100%.
+  final void Function(double deltaPercent) onSpeedNudge;
+  final VoidCallback onSpeedReset;
+
   const MachineCard({
     super.key,
     required this.machine,
@@ -23,6 +27,8 @@ class MachineCard extends StatelessWidget {
     required this.onReset,
     required this.onDelete,
     required this.onOpen,
+    required this.onSpeedNudge,
+    required this.onSpeedReset,
   });
 
   Color get _statusColor {
@@ -109,7 +115,15 @@ class MachineCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 10),
+
+              // ---- live speed control ----
+              _SpeedControl(
+                percent: machine.speedPercent,
+                onNudge: onSpeedNudge,
+                onReset: onSpeedReset,
+              ),
+              const SizedBox(height: 10),
 
               // ---- animated progress ----
               Row(
@@ -152,6 +166,106 @@ class MachineCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Inline decode-speed control: -10% / percent label / +10% (tap % to reset).
+class _SpeedControl extends StatelessWidget {
+  final int percent;
+  final void Function(double deltaPercent) onNudge;
+  final VoidCallback onReset;
+
+  const _SpeedControl({
+    required this.percent,
+    required this.onNudge,
+    required this.onReset,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final abnormal = percent != 100;
+    final color = percent > 100
+        ? AppColors.dashGreen
+        : percent < 100
+            ? AppColors.dashRed
+            : AppColors.dashGrey;
+    return Row(
+      children: [
+        const Icon(Icons.speed, size: 15, color: AppColors.dashGrey),
+        const SizedBox(width: 6),
+        const Text(
+          '解読速度',
+          style: TextStyle(fontSize: 12, color: AppColors.dashGrey),
+        ),
+        const Spacer(),
+        _NudgeButton(
+          icon: Icons.remove,
+          tooltip: '-10%',
+          onTap: () => onNudge(-10),
+        ),
+        GestureDetector(
+          onTap: abnormal ? onReset : null,
+          child: Tooltip(
+            message: abnormal ? 'タップで100%に戻す' : '標準速度',
+            child: Container(
+              width: 56,
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: abnormal ? 0.1 : 0.0),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$percent%',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+            ),
+          ),
+        ),
+        _NudgeButton(
+          icon: Icons.add,
+          tooltip: '+10%',
+          onTap: () => onNudge(10),
+        ),
+      ],
+    );
+  }
+}
+
+class _NudgeButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _NudgeButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          width: 30,
+          height: 26,
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.dashLine),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 15, color: AppColors.dashInk),
         ),
       ),
     );
