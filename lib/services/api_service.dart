@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/machine.dart';
+import '../models/sound_asset.dart';
 
 /// REST API client. Base URL is same-origin (server hosts the Flutter build).
 class ApiService {
@@ -57,6 +58,10 @@ class ApiService {
     String? name,
     int? durationSec,
     String? design,
+    double? speedMultiplier,
+    bool? rhythmEnabled,
+    double? rhythmSuccessBonus,
+    double? rhythmFailPenalty,
   }) async {
     final res = await http.patch(
       _u('/api/machines/$id'),
@@ -65,9 +70,39 @@ class ApiService {
         if (name != null) 'name': name,
         if (durationSec != null) 'duration_sec': durationSec,
         if (design != null) 'design': design,
+        if (speedMultiplier != null) 'speed_multiplier': speedMultiplier,
+        if (rhythmEnabled != null) 'rhythm_enabled': rhythmEnabled,
+        if (rhythmSuccessBonus != null)
+          'rhythm_success_bonus': rhythmSuccessBonus,
+        if (rhythmFailPenalty != null)
+          'rhythm_fail_penalty': rhythmFailPenalty,
       }),
     );
     if (res.statusCode != 200) throw Exception('failed to update machine');
+    return Machine.fromJson(
+        jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>);
+  }
+
+  /// Nudge decode speed live: deltaPercent=+10 => +10 percent points.
+  Future<Machine> nudgeMachineSpeed(String id, double deltaPercent) async {
+    final res = await http.post(
+      _u('/api/machines/$id/speed'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'delta_percent': deltaPercent}),
+    );
+    if (res.statusCode != 200) throw Exception('failed to change speed');
+    return Machine.fromJson(
+        jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>);
+  }
+
+  /// Set decode speed to an absolute multiplier (1.0 = 100%).
+  Future<Machine> setMachineSpeed(String id, double multiplier) async {
+    final res = await http.post(
+      _u('/api/machines/$id/speed'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'speed_multiplier': multiplier}),
+    );
+    if (res.statusCode != 200) throw Exception('failed to change speed');
     return Machine.fromJson(
         jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>);
   }
@@ -84,6 +119,60 @@ class ApiService {
 
   /// Public URL for a machine page (for QR / sharing).
   String machineUrl(String id) => '$baseUrl/#/machine/$id';
+
+  // ---------------- sound assets (mp3) ----------------
+
+  Future<List<SoundAsset>> listSounds() async {
+    final res = await http.get(_u('/api/sounds'));
+    if (res.statusCode != 200) throw Exception('failed to list sounds');
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    return (data['sounds'] as List)
+        .map((e) => SoundAsset.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<SoundAsset> uploadSound({
+    required String filename,
+    required List<int> bytes,
+    String role = 'none',
+  }) async {
+    final req = http.MultipartRequest('POST', _u('/api/sounds'))
+      ..fields['role'] = role
+      ..files.add(http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: filename,
+      ));
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+    if (res.statusCode != 200) {
+      String detail = 'failed to upload sound';
+      try {
+        final body =
+            jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+        detail = (body['detail'] as String?) ?? detail;
+      } catch (_) {}
+      throw Exception(detail);
+    }
+    return SoundAsset.fromJson(
+        jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>);
+  }
+
+  Future<SoundAsset> setSoundRole(String id, String role) async {
+    final res = await http.patch(
+      _u('/api/sounds/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'role': role}),
+    );
+    if (res.statusCode != 200) throw Exception('failed to set sound role');
+    return SoundAsset.fromJson(
+        jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>);
+  }
+
+  Future<void> deleteSound(String id) async {
+    final res = await http.delete(_u('/api/sounds/$id'));
+    if (res.statusCode != 200) throw Exception('failed to delete sound');
+  }
 
   /// Public URL for the 3D game lobby.
   String gameUrl() => '$baseUrl/game/';
