@@ -4,15 +4,16 @@ import 'package:flutter/foundation.dart';
 
 import '../models/machine.dart';
 import '../services/socket_service.dart';
+import '../services/sound_service.dart';
 
 /// Connection phase of the decoder page.
 enum DecoderPhase { connecting, ready, locked, notFound, deleted }
 
 /// Decoding logic, separated from UI.
 ///
-/// Interaction is intentionally simple:
-/// hold the machine => progress advances; release => pause.
-/// (The old skill-check QTE was removed by design.)
+/// Interaction:
+/// - hold the machine => progress advances (speed set live by operators)
+/// - optional rhythm mini-game => success/fail nudges progress
 class DecoderController extends ChangeNotifier {
   final String machineId;
 
@@ -24,6 +25,11 @@ class DecoderController extends ChangeNotifier {
   double progress = 0; // 0..100
   bool holding = false;
   bool get completed => progress >= 100;
+
+  // --- rhythm mini-game ---
+  bool rhythmOpen = false;
+  bool get rhythmAvailable =>
+      (machine?.rhythmEnabled ?? false) && !completed && !rhythmOpen;
 
   SocketService? _socket;
   StreamSubscription? _msgSub;
@@ -37,8 +43,12 @@ class DecoderController extends ChangeNotifier {
   double get durationSec =>
       (machine?.durationSec ?? 60).clamp(5, 3600).toDouble();
 
+  /// Operator-controlled decode speed multiplier (0.1 .. 3.0).
+  double get speedMultiplier =>
+      (machine?.speedMultiplier ?? 1.0).clamp(0.1, 3.0);
+
   /// Progress gained per second while holding.
-  double get _ratePerSec => 100.0 / durationSec;
+  double get _ratePerSec => 100.0 / durationSec * speedMultiplier;
 
   // ------------------------------------------------------------------
   // lifecycle
@@ -57,12 +67,20 @@ class DecoderController extends ChangeNotifier {
         machine = Machine.fromJson(msg['machine'] as Map<String, dynamic>);
         progress = machine!.progress;
         phase = DecoderPhase.ready;
+        SoundService.instance
+            .updateSources(msg['sounds'] as Map<String, dynamic>?);
         _startTicker();
         notifyListeners();
         break;
       case 'settings':
-        // live settings update (name / duration / design)
+        // live settings update (name / duration / design / speed / rhythm)
         machine = Machine.fromJson(msg['machine'] as Map<String, dynamic>);
+        notifyListeners();
+        break;
+      case 'sounds':
+        // operator changed sound assignments
+        SoundService.instance
+            .updateSources(msg['roles'] as Map<String, dynamic>?);
         notifyListeners();
         break;
       case 'reset':
@@ -94,16 +112,50 @@ class DecoderController extends ChangeNotifier {
   // hold to decode
   // ------------------------------------------------------------------
   void startHold() {
-    if (phase != DecoderPhase.ready || completed) return;
+    if (phase != DecoderPhase.ready || completed || rhythmOpen) return;
     holding = true;
     _lastTick = DateTime.now();
+    SoundService.instance.startDecodeLoop();
     notifyListeners();
   }
 
   void endHold() {
     if (!holding) return;
     holding = false;
+    SoundService.instance.stopDecodeLoop();
     _sendProgress(completed ? 'completed' : 'paused');
+    notifyListeners();
+  }
+
+  // ------------------------------------------------------------------
+  // rhythm mini-game
+  // ------------------------------------------------------------------
+  void openRhythm() {
+    if (!rhythmAvailable || phase != DecoderPhase.ready) return;
+    endHold();
+    rhythmOpen = true;
+    notifyListeners();
+  }
+
+  /// Apply the mini-game result: success => +bonus%, fail => -penalty%.
+  void finishRhythm(bool success) {
+    rhythmOpen = false;
+    final m = machine;
+    final bonus = m?.rhythmSuccessBonus ?? 5.0;
+    final penalty = m?.rhythmFailPenalty ?? 2.0;
+    if (success) {
+      progress = (progress + bonus).clamp(0, 100);
+    } else {
+      progress = (progress - penalty).clamp(0, 100);
+    }
+    _socket?.send({'type': 'skill', 'success': success});
+    if (completed) {
+      progress = 100;
+      SoundService.instance.playComplete();
+      _sendProgress('completed');
+    } else {
+      _sendProgress('paused');
+    }
     notifyListeners();
   }
 
@@ -124,6 +176,8 @@ class DecoderController extends ChangeNotifier {
     if (completed) {
       progress = 100;
       holding = false;
+      SoundService.instance.stopDecodeLoop();
+      SoundService.instance.playComplete();
       _sendProgress('completed');
     } else {
       _throttledSend();
@@ -152,6 +206,7 @@ class DecoderController extends ChangeNotifier {
   void _stopAll() {
     _ticker?.cancel();
     holding = false;
+    SoundService.instance.stopAll();
   }
 
   @override
