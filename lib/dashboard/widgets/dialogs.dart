@@ -138,9 +138,17 @@ class _CopyButtonState extends State<_CopyButton> {
 }
 
 /// ---------- create / edit machine dialog ----------
-/// Returns (name, durationSec, design) or null when cancelled.
-Future<({String name, int durationSec, String design})?>
-    showMachineFormDialog(
+/// Returned settings bundle (null when cancelled).
+typedef MachineFormResult = ({
+  String name,
+  int durationSec,
+  String design,
+  bool rhythmEnabled,
+  double rhythmSuccessBonus,
+  double rhythmFailPenalty,
+});
+
+Future<MachineFormResult?> showMachineFormDialog(
   BuildContext context, {
   Machine? existing,
 }) {
@@ -148,8 +156,11 @@ Future<({String name, int durationSec, String design})?>
   final isEdit = existing != null;
   int duration = existing?.durationSec ?? 60;
   String design = existing?.design ?? 'classic';
+  bool rhythmEnabled = existing?.rhythmEnabled ?? true;
+  double rhythmBonus = existing?.rhythmSuccessBonus ?? 5.0;
+  double rhythmPenalty = existing?.rhythmFailPenalty ?? 2.0;
 
-  return showDialog<({String name, int durationSec, String design})>(
+  return showDialog<MachineFormResult>(
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setState) {
@@ -159,7 +170,8 @@ Future<({String name, int durationSec, String design})?>
           backgroundColor: Colors.white,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 420),
-            child: Padding(
+            child: SingleChildScrollView(
+              child: Padding(
               padding: const EdgeInsets.all(28),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -235,7 +247,44 @@ Future<({String name, int durationSec, String design})?>
                     selected: design,
                     onChanged: (key) => setState(() => design = key),
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 24),
+
+                  // ---- rhythm mini-game settings ----
+                  Row(
+                    children: [
+                      const Text(
+                        'リズム解読（音ゲー）',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const Spacer(),
+                      Switch(
+                        value: rhythmEnabled,
+                        activeThumbColor: AppColors.dashBlue,
+                        onChanged: (v) => setState(() => rhythmEnabled = v),
+                      ),
+                    ],
+                  ),
+                  if (rhythmEnabled) ...[
+                    const SizedBox(height: 4),
+                    _RhythmSlider(
+                      label: '成功ボーナス',
+                      value: rhythmBonus,
+                      color: AppColors.dashGreen,
+                      prefix: '+',
+                      onChanged: (v) => setState(() => rhythmBonus = v),
+                    ),
+                    _RhythmSlider(
+                      label: '失敗ペナルティ',
+                      value: rhythmPenalty,
+                      color: AppColors.dashRed,
+                      prefix: '-',
+                      onChanged: (v) => setState(() => rhythmPenalty = v),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
@@ -257,6 +306,9 @@ Future<({String name, int durationSec, String design})?>
                               name: name,
                               durationSec: duration,
                               design: design,
+                              rhythmEnabled: rhythmEnabled,
+                              rhythmSuccessBonus: rhythmBonus,
+                              rhythmFailPenalty: rhythmPenalty,
                             ),
                           );
                         },
@@ -266,12 +318,67 @@ Future<({String name, int durationSec, String design})?>
                   ),
                 ],
               ),
+              ),
             ),
           ),
         );
       },
     ),
   );
+}
+
+/// Labelled 0-30% slider used for the rhythm bonus / penalty settings.
+class _RhythmSlider extends StatelessWidget {
+  final String label;
+  final double value;
+  final Color color;
+  final String prefix;
+  final ValueChanged<double> onChanged;
+
+  const _RhythmSlider({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.prefix,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 110,
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 12.5, color: AppColors.dashGrey),
+          ),
+        ),
+        Expanded(
+          child: Slider(
+            value: value.clamp(0, 30),
+            min: 0,
+            max: 30,
+            divisions: 60,
+            activeColor: color,
+            onChanged: onChanged,
+          ),
+        ),
+        SizedBox(
+          width: 52,
+          child: Text(
+            '$prefix${value.toStringAsFixed(1)}%',
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 /// Horizontal list of the 5 machine designs with a mini preview each.
@@ -384,9 +491,9 @@ class MachineThumbnailPainter extends CustomPainter {
 
     // crate
     final crate = Rect.fromLTRB(w * 0.18, h * 0.60, w * 0.82, h * 0.94);
-    canvas.drawRect(crate, Paint()..color = design.crate);
+    canvas.drawRect(crate, Paint()..color = design.wood);
     final brace = Paint()
-      ..color = design.crateDark
+      ..color = design.woodDark
       ..strokeWidth = w * 0.045
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(crate.topLeft, crate.bottomRight, brace);
@@ -404,7 +511,7 @@ class MachineThumbnailPainter extends CustomPainter {
         Rect.fromLTWH(w * 0.28, h * 0.30, w * 0.44, h * 0.06),
         const Radius.circular(3),
       ),
-      Paint()..color = design.platen,
+      Paint()..color = design.accentDark,
     );
 
     // body
@@ -414,11 +521,11 @@ class MachineThumbnailPainter extends CustomPainter {
         topLeft: const Radius.circular(4),
         topRight: const Radius.circular(4),
       ),
-      Paint()..color = design.body,
+      Paint()..color = design.base,
     );
 
     // keys: 2 rows of dots
-    final key = Paint()..color = design.keyCap;
+    final key = Paint()..color = design.accent;
     for (int row = 0; row < 2; row++) {
       for (int i = 0; i < 5; i++) {
         canvas.drawCircle(
