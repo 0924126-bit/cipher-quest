@@ -11,13 +11,15 @@ Run: uvicorn main:app --host 0.0.0.0 --port 5060
 import asyncio
 import os
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import (FastAPI, File, Form, HTTPException, UploadFile,
+                     WebSocket, WebSocketDisconnect)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from store import store
+from sounds import SOUNDS_DIR, sound_store
 from connections import manager
 from game.routes import router as game_router, pump_loop
 
@@ -68,6 +70,20 @@ class MachineUpdate(BaseModel):
     name: str | None = None
     duration_sec: int | None = None
     design: str | None = None
+    speed_multiplier: float | None = None
+    rhythm_enabled: bool | None = None
+    rhythm_success_bonus: float | None = None
+    rhythm_fail_penalty: float | None = None
+
+
+class SpeedUpdate(BaseModel):
+    """Absolute multiplier OR relative delta in percent points (+10 / -10)."""
+    speed_multiplier: float | None = None
+    delta_percent: float | None = None
+
+
+class SoundRole(BaseModel):
+    role: str
 
 
 # ---------- REST endpoints ----------
@@ -100,11 +116,44 @@ async def get_machine(machine_id: str):
 
 @app.patch("/api/machines/{machine_id}")
 async def update_machine(machine_id: str, body: MachineUpdate):
-    m = store.update_settings(machine_id, body.name, body.duration_sec, body.design)
+    m = store.update_settings(
+        machine_id, body.name, body.duration_sec, body.design,
+        speed_multiplier=body.speed_multiplier,
+        rhythm_enabled=body.rhythm_enabled,
+        rhythm_success_bonus=body.rhythm_success_bonus,
+        rhythm_fail_penalty=body.rhythm_fail_penalty,
+    )
     if not m:
         raise HTTPException(404, "machine not found")
     # notify the live machine page of new settings
     await manager.send_to_machine(machine_id, {"type": "settings", "machine": machine_public(m)})
+    await broadcast_state()
+    return machine_public(m)
+
+
+@app.post("/api/machines/{machine_id}/speed")
+async def set_machine_speed(machine_id: str, body: SpeedUpdate):
+    """Live decode-speed control from the operator dashboard.
+
+    Accepts either an absolute multiplier (speed_multiplier=1.2)
+    or a relative nudge in percent points (delta_percent=+10 / -10).
+    """
+    m = store.get(machine_id)
+    if not m:
+        raise HTTPException(404, "machine not found")
+    if body.speed_multiplier is not None:
+        new_mult = body.speed_multiplier
+    elif body.delta_percent is not None:
+        new_mult = m["speed_multiplier"] + body.delta_percent / 100.0
+    else:
+        raise HTTPException(400, "speed_multiplier or delta_percent required")
+    m = store.update_settings(machine_id, speed_multiplier=new_mult)
+    pct = round(m["speed_multiplier"] * 100)
+    ev = store.add_event(machine_id, "speed",
+                         f"{m['name']} の解読速度を {pct}% に変更しました")
+    await manager.send_to_machine(
+        machine_id, {"type": "settings", "machine": machine_public(m)})
+    await broadcast_event(ev)
     await broadcast_state()
     return machine_public(m)
 
@@ -136,6 +185,55 @@ async def get_events():
     return {"events": store.events[-50:]}
 
 
+# ---------- REST: sound assets (mp3) ----------
+@app.get("/api/sounds")
+async def list_sounds():
+    return {"sounds": sound_store.list_sounds(), "roles": sound_store.role_map()}
+
+
+@app.post("/api/sounds")
+async def upload_sound(file: UploadFile = File(...), role: str = Form("none")):
+    name = file.filename or "sound.mp3"
+    if not name.lower().endswith(".mp3"):
+        raise HTTPException(400, "mp3ファイルのみアップロードできます")
+    data = await file.read()
+    try:
+        s = sound_store.add(name, data, role)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    store.add_event("", "sound", f"サウンド「{s['original_name']}」を追加しました")
+    await _notify_sounds()
+    return s
+
+
+@app.patch("/api/sounds/{sound_id}")
+async def set_sound_role(sound_id: str, body: SoundRole):
+    try:
+        s = sound_store.set_role(sound_id, body.role)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if not s:
+        raise HTTPException(404, "sound not found")
+    await _notify_sounds()
+    return s
+
+
+@app.delete("/api/sounds/{sound_id}")
+async def delete_sound(sound_id: str):
+    s = sound_store.delete(sound_id)
+    if not s:
+        raise HTTPException(404, "sound not found")
+    await _notify_sounds()
+    return {"ok": True}
+
+
+async def _notify_sounds():
+    """Push the latest role->url map to every open machine page + dashboards."""
+    payload = {"type": "sounds", "roles": sound_store.role_map()}
+    await manager.broadcast_machines(payload)
+    await manager.broadcast_dashboards(payload)
+
+
 # ---------- WebSocket: machine (exclusive) ----------
 @app.websocket("/ws/machine/{machine_id}")
 async def ws_machine(ws: WebSocket, machine_id: str):
@@ -153,7 +251,11 @@ async def ws_machine(ws: WebSocket, machine_id: str):
         return
 
     store.set_connected(machine_id, True)
-    await ws.send_json({"type": "init", "machine": machine_public(store.get(machine_id))})
+    await ws.send_json({
+        "type": "init",
+        "machine": machine_public(store.get(machine_id)),
+        "sounds": sound_store.role_map(),
+    })
     ev = store.add_event(machine_id, "connect", f"{m['name']} がオンラインになりました")
     await broadcast_event(ev)
     await broadcast_state()
@@ -179,12 +281,18 @@ async def ws_machine(ws: WebSocket, machine_id: str):
                         await broadcast_event(ev2)
                 await broadcast_state()
             elif t == "skill":
-                store.record_skill(machine_id, bool(data.get("success")))
-                if not data.get("success"):
+                # rhythm mini-game result (success / fail)
+                success = bool(data.get("success"))
+                store.record_skill(machine_id, success)
+                if success:
+                    ev = store.add_event(
+                        machine_id, "rhythm_success",
+                        f"{m['name']} でリズム解読成功！進捗ボーナス獲得")
+                else:
                     ev = store.add_event(
                         machine_id, "skill_miss",
-                        f"{m['name']} でスキルチェック失敗！")
-                    await broadcast_event(ev)
+                        f"{m['name']} でリズム解読失敗…進捗が後退")
+                await broadcast_event(ev)
                 await broadcast_state()
             elif t == "ping":
                 await ws.send_json({"type": "pong"})
@@ -223,6 +331,10 @@ async def ws_dashboard(ws: WebSocket):
         pass
     finally:
         manager.disconnect_dashboard(ws)
+
+
+# ---------- Static sound files ----------
+app.mount("/sounds", StaticFiles(directory=SOUNDS_DIR), name="sounds")
 
 
 # ---------- Static Flutter web ----------
