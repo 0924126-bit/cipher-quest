@@ -36,6 +36,18 @@ class ConnectionManager:
             except Exception:
                 pass
 
+    async def broadcast_machines(self, payload: dict):
+        """Send a payload to every connected machine page (e.g. sound updates)."""
+        text = json.dumps(payload, ensure_ascii=False)
+        for mid in list(self.machine_sockets.keys()):
+            ws = self.machine_sockets.get(mid)
+            if ws is None:
+                continue
+            try:
+                await ws.send_text(text)
+            except Exception:
+                pass
+
     # ---------- dashboard side ----------
     async def connect_dashboard(self, ws: WebSocket):
         self.dashboard_sockets.add(ws)
