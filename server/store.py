@@ -13,7 +13,12 @@ DATA_FILE = os.path.join(os.path.dirname(__file__), "data.json")
 
 # Machine visual design presets selectable from the operator dashboard.
 # Keep in sync with lib/decoder/widgets/machine_designs.dart on the client.
-VALID_DESIGNS = ("classic", "mahogany", "military", "brass", "noir")
+VALID_DESIGNS = (
+    # current machine painters (lib/decoder/widgets/machines/)
+    "classic", "rotor", "telegraph", "gearwork", "horologe",
+    # legacy palette keys kept so old data.json records stay valid
+    "mahogany", "military", "brass", "noir",
+)
 DEFAULT_DESIGN = "classic"
 
 _lock = threading.Lock()
@@ -24,6 +29,22 @@ def sanitize_design(design) -> str:
     if isinstance(design, str) and design in VALID_DESIGNS:
         return design
     return DEFAULT_DESIGN
+
+
+def clamp_speed(v) -> float:
+    """Decode speed multiplier: 0.1x (=-90%) .. 3.0x (=+200%)."""
+    try:
+        return max(0.1, min(3.0, round(float(v), 2)))
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def clamp_pct(v, default: float) -> float:
+    """Rhythm-game reward/penalty in percent points (0..30)."""
+    try:
+        return max(0.0, min(30.0, round(float(v), 1)))
+    except (TypeError, ValueError):
+        return default
 
 
 def _now_ms() -> int:
@@ -51,6 +72,13 @@ class MachineStore:
                         m["status"] = "paused"
                     # migrate old records that predate the design field
                     m["design"] = sanitize_design(m.get("design"))
+                    # migrate records that predate speed / rhythm settings
+                    m["speed_multiplier"] = clamp_speed(m.get("speed_multiplier", 1.0))
+                    m["rhythm_enabled"] = bool(m.get("rhythm_enabled", True))
+                    m["rhythm_success_bonus"] = clamp_pct(
+                        m.get("rhythm_success_bonus", 5.0), 5.0)
+                    m["rhythm_fail_penalty"] = clamp_pct(
+                        m.get("rhythm_fail_penalty", 2.0), 2.0)
             except Exception:
                 self.machines = {}
                 self.events = []
@@ -81,6 +109,10 @@ class MachineStore:
                 "name": name or f"暗号機 {len(self.machines) + 1}",
                 "duration_sec": max(5, min(3600, int(duration_sec))),
                 "design": sanitize_design(design),
+                "speed_multiplier": 1.0,   # decode speed (1.0 = 100%)
+                "rhythm_enabled": True,    # rhythm mini-game available
+                "rhythm_success_bonus": 5.0,   # +% on rhythm success
+                "rhythm_fail_penalty": 2.0,    # -% on rhythm fail
                 "progress": 0.0,          # 0-100
                 "status": "idle",          # idle / decoding / paused / completed
                 "connected": False,
@@ -94,7 +126,9 @@ class MachineStore:
             self._save()
             return machine
 
-    def update_settings(self, machine_id, name=None, duration_sec=None, design=None):
+    def update_settings(self, machine_id, name=None, duration_sec=None, design=None,
+                        speed_multiplier=None, rhythm_enabled=None,
+                        rhythm_success_bonus=None, rhythm_fail_penalty=None):
         with _lock:
             m = self.machines.get(machine_id)
             if not m:
@@ -105,6 +139,14 @@ class MachineStore:
                 m["duration_sec"] = max(5, min(3600, int(duration_sec)))
             if design is not None:
                 m["design"] = sanitize_design(design)
+            if speed_multiplier is not None:
+                m["speed_multiplier"] = clamp_speed(speed_multiplier)
+            if rhythm_enabled is not None:
+                m["rhythm_enabled"] = bool(rhythm_enabled)
+            if rhythm_success_bonus is not None:
+                m["rhythm_success_bonus"] = clamp_pct(rhythm_success_bonus, 5.0)
+            if rhythm_fail_penalty is not None:
+                m["rhythm_fail_penalty"] = clamp_pct(rhythm_fail_penalty, 2.0)
             m["updated_at"] = _now_ms()
             self._save()
             return m
