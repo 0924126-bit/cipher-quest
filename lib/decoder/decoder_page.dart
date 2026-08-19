@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import 'decoder_controller.dart';
+import 'rhythm_game.dart';
 import 'widgets/cipher_machine.dart';
 import 'widgets/machine_designs.dart';
 import 'widgets/overlays.dart';
@@ -170,11 +171,19 @@ class _DecoderPageState extends State<DecoderPage> {
                       progress: _ctrl.progress,
                       accent: design.lampActive,
                     ),
+                    if (_ctrl.speedMultiplier != 1.0) ...[
+                      const SizedBox(height: 6),
+                      _SpeedBadge(percent: _ctrl.machine?.speedPercent ?? 100),
+                    ],
                     const SizedBox(height: 16),
                     _PulsingHint(
                       text: _ctrl.holding ? '解読中...' : '暗号機を長押しして解読せよ',
                       active: !_ctrl.holding,
                     ),
+                    if (_ctrl.rhythmAvailable) ...[
+                      const SizedBox(height: 18),
+                      _RhythmButton(onPressed: _ctrl.openRhythm),
+                    ],
                   ],
                 ),
               ),
@@ -182,10 +191,77 @@ class _DecoderPageState extends State<DecoderPage> {
           ),
         ),
 
+        // ---- rhythm mini-game overlay ----
+        if (_ctrl.rhythmOpen)
+          RhythmGameOverlay(
+            successBonus: _ctrl.machine?.rhythmSuccessBonus ?? 5.0,
+            failPenalty: _ctrl.machine?.rhythmFailPenalty ?? 2.0,
+            onFinished: (r) => _ctrl.finishRhythm(r.success),
+          ),
+
         // ---- completed overlay ----
         if (_ctrl.completed)
           CompletedOverlay(machineName: _ctrl.machine?.name ?? ''),
       ],
+    );
+  }
+}
+
+/// Small badge showing the operator-set decode speed (only when != 100%).
+class _SpeedBadge extends StatelessWidget {
+  final int percent;
+  const _SpeedBadge({required this.percent});
+
+  @override
+  Widget build(BuildContext context) {
+    final boosted = percent > 100;
+    final color = boosted ? AppColors.lamp : AppColors.blood;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(
+        '解読速度 $percent%',
+        style: TextStyle(
+          fontSize: 12,
+          letterSpacing: 2,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+/// Brass-styled button that opens the rhythm mini-game.
+class _RhythmButton extends StatelessWidget {
+  final VoidCallback onPressed;
+  const _RhythmButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.amber,
+        side: BorderSide(color: AppColors.amber.withValues(alpha: 0.6)),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+      ),
+      icon: const Icon(Icons.music_note, size: 18),
+      label: const Text(
+        'リズム解読に挑戦',
+        style: TextStyle(
+          fontSize: 14,
+          letterSpacing: 3,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 }
