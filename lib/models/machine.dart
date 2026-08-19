@@ -7,6 +7,15 @@ class Machine {
   /// Visual design key: classic / mahogany / military / brass / noir.
   /// See lib/decoder/widgets/machine_designs.dart for definitions.
   final String design;
+
+  /// Live decode speed multiplier set by operators (1.0 = 100%).
+  final double speedMultiplier;
+
+  /// Rhythm mini-game availability + reward/penalty in percent points.
+  final bool rhythmEnabled;
+  final double rhythmSuccessBonus;
+  final double rhythmFailPenalty;
+
   final double progress; // 0-100
   final String status; // idle / decoding / paused / completed
   final bool connected;
@@ -22,6 +31,10 @@ class Machine {
     required this.name,
     required this.durationSec,
     required this.design,
+    this.speedMultiplier = 1.0,
+    this.rhythmEnabled = true,
+    this.rhythmSuccessBonus = 5.0,
+    this.rhythmFailPenalty = 2.0,
     required this.progress,
     required this.status,
     required this.connected,
@@ -39,6 +52,13 @@ class Machine {
       name: (json['name'] as String?) ?? '暗号機',
       durationSec: (json['duration_sec'] as num?)?.toInt() ?? 60,
       design: (json['design'] as String?) ?? 'classic',
+      speedMultiplier:
+          (json['speed_multiplier'] as num?)?.toDouble() ?? 1.0,
+      rhythmEnabled: (json['rhythm_enabled'] as bool?) ?? true,
+      rhythmSuccessBonus:
+          (json['rhythm_success_bonus'] as num?)?.toDouble() ?? 5.0,
+      rhythmFailPenalty:
+          (json['rhythm_fail_penalty'] as num?)?.toDouble() ?? 2.0,
       progress: (json['progress'] as num?)?.toDouble() ?? 0.0,
       status: (json['status'] as String?) ?? 'idle',
       connected: (json['connected'] as bool?) ?? false,
@@ -54,10 +74,17 @@ class Machine {
   bool get isCompleted => status == 'completed';
   bool get isDecoding => status == 'decoding';
 
+  /// Speed as an operator-friendly percentage (100 = normal).
+  int get speedPercent => (speedMultiplier * 100).round();
+
   Machine copyWith({
     String? name,
     int? durationSec,
     String? design,
+    double? speedMultiplier,
+    bool? rhythmEnabled,
+    double? rhythmSuccessBonus,
+    double? rhythmFailPenalty,
     double? progress,
     String? status,
   }) {
@@ -66,6 +93,10 @@ class Machine {
       name: name ?? this.name,
       durationSec: durationSec ?? this.durationSec,
       design: design ?? this.design,
+      speedMultiplier: speedMultiplier ?? this.speedMultiplier,
+      rhythmEnabled: rhythmEnabled ?? this.rhythmEnabled,
+      rhythmSuccessBonus: rhythmSuccessBonus ?? this.rhythmSuccessBonus,
+      rhythmFailPenalty: rhythmFailPenalty ?? this.rhythmFailPenalty,
       progress: progress ?? this.progress,
       status: status ?? this.status,
       connected: connected,
