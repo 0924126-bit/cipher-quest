@@ -143,9 +143,10 @@ typedef MachineFormResult = ({
   String name,
   int durationSec,
   String design,
-  bool rhythmEnabled,
-  double rhythmSuccessBonus,
-  double rhythmFailPenalty,
+  bool skillEnabled,
+  int skillDifficulty,
+  double skillSuccessBonus,
+  double skillFailPenalty,
 });
 
 Future<MachineFormResult?> showMachineFormDialog(
@@ -156,9 +157,10 @@ Future<MachineFormResult?> showMachineFormDialog(
   final isEdit = existing != null;
   int duration = existing?.durationSec ?? 60;
   String design = existing?.design ?? 'classic';
-  bool rhythmEnabled = existing?.rhythmEnabled ?? true;
-  double rhythmBonus = existing?.rhythmSuccessBonus ?? 5.0;
-  double rhythmPenalty = existing?.rhythmFailPenalty ?? 2.0;
+  bool skillEnabled = existing?.skillEnabled ?? true;
+  int skillDifficulty = existing?.skillDifficulty ?? 2;
+  double skillBonus = existing?.skillSuccessBonus ?? 3.0;
+  double skillPenalty = existing?.skillFailPenalty ?? 3.0;
 
   return showDialog<MachineFormResult>(
     context: context,
@@ -249,11 +251,11 @@ Future<MachineFormResult?> showMachineFormDialog(
                   ),
                   const SizedBox(height: 24),
 
-                  // ---- rhythm mini-game settings ----
+                  // ---- skill check (QTE) settings ----
                   Row(
                     children: [
                       const Text(
-                        'リズム解読（音ゲー）',
+                        'スキルチェック（QTE）',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
@@ -261,27 +263,40 @@ Future<MachineFormResult?> showMachineFormDialog(
                       ),
                       const Spacer(),
                       Switch(
-                        value: rhythmEnabled,
+                        value: skillEnabled,
                         activeThumbColor: AppColors.dashBlue,
-                        onChanged: (v) => setState(() => rhythmEnabled = v),
+                        onChanged: (v) => setState(() => skillEnabled = v),
                       ),
                     ],
                   ),
-                  if (rhythmEnabled) ...[
+                  if (skillEnabled) ...[
                     const SizedBox(height: 4),
-                    _RhythmSlider(
+                    const Text(
+                      '難易度',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: AppColors.dashGrey,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _DifficultyPicker(
+                      selected: skillDifficulty,
+                      onChanged: (v) => setState(() => skillDifficulty = v),
+                    ),
+                    const SizedBox(height: 12),
+                    _SkillSlider(
                       label: '成功ボーナス',
-                      value: rhythmBonus,
+                      value: skillBonus,
                       color: AppColors.dashGreen,
                       prefix: '+',
-                      onChanged: (v) => setState(() => rhythmBonus = v),
+                      onChanged: (v) => setState(() => skillBonus = v),
                     ),
-                    _RhythmSlider(
+                    _SkillSlider(
                       label: '失敗ペナルティ',
-                      value: rhythmPenalty,
+                      value: skillPenalty,
                       color: AppColors.dashRed,
                       prefix: '-',
-                      onChanged: (v) => setState(() => rhythmPenalty = v),
+                      onChanged: (v) => setState(() => skillPenalty = v),
                     ),
                   ],
                   const SizedBox(height: 20),
@@ -306,9 +321,10 @@ Future<MachineFormResult?> showMachineFormDialog(
                               name: name,
                               durationSec: duration,
                               design: design,
-                              rhythmEnabled: rhythmEnabled,
-                              rhythmSuccessBonus: rhythmBonus,
-                              rhythmFailPenalty: rhythmPenalty,
+                              skillEnabled: skillEnabled,
+                              skillDifficulty: skillDifficulty,
+                              skillSuccessBonus: skillBonus,
+                              skillFailPenalty: skillPenalty,
                             ),
                           );
                         },
@@ -327,15 +343,74 @@ Future<MachineFormResult?> showMachineFormDialog(
   );
 }
 
-/// Labelled 0-30% slider used for the rhythm bonus / penalty settings.
-class _RhythmSlider extends StatelessWidget {
+/// Skill check difficulty selector (1-5).
+class _DifficultyPicker extends StatelessWidget {
+  final int selected;
+  final ValueChanged<int> onChanged;
+
+  const _DifficultyPicker({required this.selected, required this.onChanged});
+
+  static const _labels = ['かんたん', 'ふつう', 'むずかしい', '激ムズ', '地獄'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (var level = 1; level <= 5; level++) ...[
+          Expanded(
+            child: GestureDetector(
+              onTap: () => onChanged(level),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: selected == level
+                      ? AppColors.dashBlue
+                      : AppColors.dashBlue.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      '$level',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: selected == level
+                            ? Colors.white
+                            : AppColors.dashBlue,
+                      ),
+                    ),
+                    Text(
+                      _labels[level - 1],
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        color: selected == level
+                            ? Colors.white.withValues(alpha: 0.9)
+                            : AppColors.dashGrey,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (level < 5) const SizedBox(width: 6),
+        ],
+      ],
+    );
+  }
+}
+
+/// Labelled 0-30% slider used for the skill check bonus / penalty settings.
+class _SkillSlider extends StatelessWidget {
   final String label;
   final double value;
   final Color color;
   final String prefix;
   final ValueChanged<double> onChanged;
 
-  const _RhythmSlider({
+  const _SkillSlider({
     required this.label,
     required this.value,
     required this.color,
