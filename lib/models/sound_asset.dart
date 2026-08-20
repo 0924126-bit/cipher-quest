@@ -1,12 +1,16 @@
 /// Uploaded mp3 sound asset managed from the operator dashboard.
 ///
+/// Every role has a built-in default sound; assigning an uploaded mp3
+/// overrides it, and setting the upload back to "none" restores the
+/// default automatically.
+///
 /// Roles (mirror of server/sounds.py):
-///   none     - stored but not used anywhere
-///   decode   - loop while a player is holding the machine
-///   complete - one-shot when a machine reaches 100%
-///   rhythm   - BGM for the rhythm mini-game
-///   success  - one-shot on rhythm success
-///   fail     - one-shot on rhythm fail
+///   none          - stored but unused (role falls back to built-in sound)
+///   decode        - loop while a player is holding the machine
+///   complete      - one-shot when a machine reaches 100%
+///   skill_warn    - cue when a skill check pops up
+///   skill_success - one-shot on skill check success
+///   skill_fail    - one-shot on skill check miss
 class SoundAsset {
   final String id;
   final String originalName;
@@ -36,12 +40,12 @@ class SoundAsset {
   }
 
   static const roleLabels = <String, String>{
-    'none': '未割当',
+    'none': '未割当（初期音）',
     'decode': '解読中ループ',
     'complete': '解読完了',
-    'rhythm': 'リズムBGM',
-    'success': 'リズム成功',
-    'fail': 'リズム失敗',
+    'skill_warn': 'スキルチェック出現',
+    'skill_success': 'スキルチェック成功',
+    'skill_fail': 'スキルチェック失敗',
   };
 
   String get roleLabel => roleLabels[role] ?? role;
