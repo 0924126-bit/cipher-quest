@@ -71,9 +71,10 @@ class MachineUpdate(BaseModel):
     duration_sec: int | None = None
     design: str | None = None
     speed_multiplier: float | None = None
-    rhythm_enabled: bool | None = None
-    rhythm_success_bonus: float | None = None
-    rhythm_fail_penalty: float | None = None
+    skill_enabled: bool | None = None
+    skill_difficulty: int | None = None
+    skill_success_bonus: float | None = None
+    skill_fail_penalty: float | None = None
 
 
 class SpeedUpdate(BaseModel):
@@ -119,9 +120,10 @@ async def update_machine(machine_id: str, body: MachineUpdate):
     m = store.update_settings(
         machine_id, body.name, body.duration_sec, body.design,
         speed_multiplier=body.speed_multiplier,
-        rhythm_enabled=body.rhythm_enabled,
-        rhythm_success_bonus=body.rhythm_success_bonus,
-        rhythm_fail_penalty=body.rhythm_fail_penalty,
+        skill_enabled=body.skill_enabled,
+        skill_difficulty=body.skill_difficulty,
+        skill_success_bonus=body.skill_success_bonus,
+        skill_fail_penalty=body.skill_fail_penalty,
     )
     if not m:
         raise HTTPException(404, "machine not found")
@@ -281,17 +283,17 @@ async def ws_machine(ws: WebSocket, machine_id: str):
                         await broadcast_event(ev2)
                 await broadcast_state()
             elif t == "skill":
-                # rhythm mini-game result (success / fail)
+                # skill check result (success / fail) during decoding
                 success = bool(data.get("success"))
                 store.record_skill(machine_id, success)
                 if success:
                     ev = store.add_event(
-                        machine_id, "rhythm_success",
-                        f"{m['name']} でリズム解読成功！進捗ボーナス獲得")
+                        machine_id, "skill_success",
+                        f"{m['name']} でスキルチェック成功！")
                 else:
                     ev = store.add_event(
                         machine_id, "skill_miss",
-                        f"{m['name']} でリズム解読失敗…進捗が後退")
+                        f"{m['name']} でスキルチェック失敗…進捗が後退")
                 await broadcast_event(ev)
                 await broadcast_state()
             elif t == "ping":
