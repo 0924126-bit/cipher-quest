@@ -11,10 +11,11 @@ class Machine {
   /// Live decode speed multiplier set by operators (1.0 = 100%).
   final double speedMultiplier;
 
-  /// Rhythm mini-game availability + reward/penalty in percent points.
-  final bool rhythmEnabled;
-  final double rhythmSuccessBonus;
-  final double rhythmFailPenalty;
+  /// Skill check (Identity V style QTE while decoding) settings.
+  final bool skillEnabled;
+  final int skillDifficulty; // 1 (easy) .. 5 (hell)
+  final double skillSuccessBonus;
+  final double skillFailPenalty;
 
   final double progress; // 0-100
   final String status; // idle / decoding / paused / completed
@@ -32,9 +33,10 @@ class Machine {
     required this.durationSec,
     required this.design,
     this.speedMultiplier = 1.0,
-    this.rhythmEnabled = true,
-    this.rhythmSuccessBonus = 5.0,
-    this.rhythmFailPenalty = 2.0,
+    this.skillEnabled = true,
+    this.skillDifficulty = 2,
+    this.skillSuccessBonus = 5.0,
+    this.skillFailPenalty = 2.0,
     required this.progress,
     required this.status,
     required this.connected,
@@ -54,11 +56,12 @@ class Machine {
       design: (json['design'] as String?) ?? 'classic',
       speedMultiplier:
           (json['speed_multiplier'] as num?)?.toDouble() ?? 1.0,
-      rhythmEnabled: (json['rhythm_enabled'] as bool?) ?? true,
-      rhythmSuccessBonus:
-          (json['rhythm_success_bonus'] as num?)?.toDouble() ?? 5.0,
-      rhythmFailPenalty:
-          (json['rhythm_fail_penalty'] as num?)?.toDouble() ?? 2.0,
+      skillEnabled: (json['skill_enabled'] as bool?) ?? true,
+      skillDifficulty: (json['skill_difficulty'] as num?)?.toInt() ?? 2,
+      skillSuccessBonus:
+          (json['skill_success_bonus'] as num?)?.toDouble() ?? 5.0,
+      skillFailPenalty:
+          (json['skill_fail_penalty'] as num?)?.toDouble() ?? 2.0,
       progress: (json['progress'] as num?)?.toDouble() ?? 0.0,
       status: (json['status'] as String?) ?? 'idle',
       connected: (json['connected'] as bool?) ?? false,
@@ -82,9 +85,10 @@ class Machine {
     int? durationSec,
     String? design,
     double? speedMultiplier,
-    bool? rhythmEnabled,
-    double? rhythmSuccessBonus,
-    double? rhythmFailPenalty,
+    bool? skillEnabled,
+    int? skillDifficulty,
+    double? skillSuccessBonus,
+    double? skillFailPenalty,
     double? progress,
     String? status,
   }) {
@@ -94,9 +98,10 @@ class Machine {
       durationSec: durationSec ?? this.durationSec,
       design: design ?? this.design,
       speedMultiplier: speedMultiplier ?? this.speedMultiplier,
-      rhythmEnabled: rhythmEnabled ?? this.rhythmEnabled,
-      rhythmSuccessBonus: rhythmSuccessBonus ?? this.rhythmSuccessBonus,
-      rhythmFailPenalty: rhythmFailPenalty ?? this.rhythmFailPenalty,
+      skillEnabled: skillEnabled ?? this.skillEnabled,
+      skillDifficulty: skillDifficulty ?? this.skillDifficulty,
+      skillSuccessBonus: skillSuccessBonus ?? this.skillSuccessBonus,
+      skillFailPenalty: skillFailPenalty ?? this.skillFailPenalty,
       progress: progress ?? this.progress,
       status: status ?? this.status,
       connected: connected,
