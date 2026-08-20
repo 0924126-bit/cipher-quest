@@ -1,19 +1,22 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
 import '../models/machine.dart';
 import '../services/socket_service.dart';
 import '../services/sound_service.dart';
+import 'skill_check.dart';
 
 /// Connection phase of the decoder page.
 enum DecoderPhase { connecting, ready, locked, notFound, deleted }
 
 /// Decoding logic, separated from UI.
 ///
-/// Interaction:
+/// Interaction (Identity V style):
 /// - hold the machine => progress advances (speed set live by operators)
-/// - optional rhythm mini-game => success/fail nudges progress
+/// - while holding, skill checks randomly pop up; tap in the zone to
+///   succeed (+bonus%), miss and progress is pushed back (-penalty%)
 class DecoderController extends ChangeNotifier {
   final String machineId;
 
@@ -26,10 +29,12 @@ class DecoderController extends ChangeNotifier {
   bool holding = false;
   bool get completed => progress >= 100;
 
-  // --- rhythm mini-game ---
-  bool rhythmOpen = false;
-  bool get rhythmAvailable =>
-      (machine?.rhythmEnabled ?? false) && !completed && !rhythmOpen;
+  // --- skill check (QTE while holding) ---
+  SkillCheckState? skillCheck;
+  int skillCheckNonce = 0; // forces a fresh overlay widget per check
+  bool get skillCheckActive => skillCheck != null;
+  final math.Random _rng = math.Random();
+  Timer? _skillTimer;
 
   SocketService? _socket;
   StreamSubscription? _msgSub;
@@ -86,6 +91,8 @@ class DecoderController extends ChangeNotifier {
       case 'reset':
         progress = 0;
         holding = false;
+        skillCheck = null;
+        _skillTimer?.cancel();
         _sendProgress('idle');
         notifyListeners();
         break;
@@ -112,49 +119,77 @@ class DecoderController extends ChangeNotifier {
   // hold to decode
   // ------------------------------------------------------------------
   void startHold() {
-    if (phase != DecoderPhase.ready || completed || rhythmOpen) return;
+    if (phase != DecoderPhase.ready || completed) return;
     holding = true;
     _lastTick = DateTime.now();
     SoundService.instance.startDecodeLoop();
+    _scheduleSkillCheck();
     notifyListeners();
   }
 
   void endHold() {
     if (!holding) return;
     holding = false;
+    _skillTimer?.cancel();
     SoundService.instance.stopDecodeLoop();
     _sendProgress(completed ? 'completed' : 'paused');
     notifyListeners();
   }
 
   // ------------------------------------------------------------------
-  // rhythm mini-game
+  // skill check (Identity V style QTE)
   // ------------------------------------------------------------------
-  void openRhythm() {
-    if (!rhythmAvailable || phase != DecoderPhase.ready) return;
-    endHold();
-    rhythmOpen = true;
+
+  /// Schedule the next random skill check while holding.
+  void _scheduleSkillCheck() {
+    _skillTimer?.cancel();
+    if (!(machine?.skillEnabled ?? false)) return;
+    // random 3.5 - 8.5s until the next check pops up
+    final delayMs = 3500 + _rng.nextInt(5000);
+    _skillTimer = Timer(Duration(milliseconds: delayMs), _triggerSkillCheck);
+  }
+
+  void _triggerSkillCheck() {
+    if (!holding || completed || skillCheckActive) {
+      // not decoding right now -> try again later if still holding
+      if (holding) _scheduleSkillCheck();
+      return;
+    }
+    final difficulty = machine?.skillDifficulty ?? 2;
+    skillCheck =
+        SkillCheckState(SkillCheckParams.forDifficulty(difficulty), _rng);
+    skillCheckNonce++;
+    SoundService.instance.playSkillWarn();
     notifyListeners();
   }
 
-  /// Apply the mini-game result: success => +bonus%, fail => -penalty%.
-  void finishRhythm(bool success) {
-    rhythmOpen = false;
+  /// Apply the QTE result: success => +bonus%, miss => -penalty%.
+  void onSkillCheckResult(SkillCheckResult result) {
+    skillCheck = null;
     final m = machine;
-    final bonus = m?.rhythmSuccessBonus ?? 5.0;
-    final penalty = m?.rhythmFailPenalty ?? 2.0;
-    if (success) {
+    final success = result != SkillCheckResult.miss;
+    // perfect gives the full bonus, good gives half
+    final bonus = m?.skillSuccessBonus ?? 5.0;
+    final penalty = m?.skillFailPenalty ?? 2.0;
+    if (result == SkillCheckResult.perfect) {
       progress = (progress + bonus).clamp(0, 100);
+    } else if (result == SkillCheckResult.good) {
+      progress = (progress + bonus / 2).clamp(0, 100);
     } else {
       progress = (progress - penalty).clamp(0, 100);
     }
+    SoundService.instance.playSkillResult(success);
     _socket?.send({'type': 'skill', 'success': success});
     if (completed) {
       progress = 100;
+      holding = false;
+      _skillTimer?.cancel();
+      SoundService.instance.stopDecodeLoop();
       SoundService.instance.playComplete();
       _sendProgress('completed');
     } else {
-      _sendProgress('paused');
+      _throttledSend(force: true);
+      if (holding) _scheduleSkillCheck();
     }
     notifyListeners();
   }
@@ -205,7 +240,9 @@ class DecoderController extends ChangeNotifier {
 
   void _stopAll() {
     _ticker?.cancel();
+    _skillTimer?.cancel();
     holding = false;
+    skillCheck = null;
     SoundService.instance.stopAll();
   }
 
