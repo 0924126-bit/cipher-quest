@@ -114,18 +114,20 @@ class DashboardController extends ChangeNotifier {
     String? name,
     int? durationSec,
     String? design,
-    bool? rhythmEnabled,
-    double? rhythmSuccessBonus,
-    double? rhythmFailPenalty,
+    bool? skillEnabled,
+    int? skillDifficulty,
+    double? skillSuccessBonus,
+    double? skillFailPenalty,
   }) async {
     await ApiService.instance.updateMachine(
       id,
       name: name,
       durationSec: durationSec,
       design: design,
-      rhythmEnabled: rhythmEnabled,
-      rhythmSuccessBonus: rhythmSuccessBonus,
-      rhythmFailPenalty: rhythmFailPenalty,
+      skillEnabled: skillEnabled,
+      skillDifficulty: skillDifficulty,
+      skillSuccessBonus: skillSuccessBonus,
+      skillFailPenalty: skillFailPenalty,
     );
   }
 
