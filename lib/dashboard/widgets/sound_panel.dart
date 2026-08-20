@@ -83,7 +83,7 @@ class _SoundPanelState extends State<SoundPanel> {
             ),
             const SizedBox(height: 6),
             const Text(
-              '用途を割り当てると全ての暗号機ページに即時反映されます（解読中ループ / 解読完了 / リズムBGM / リズム成功 / リズム失敗）',
+              '用途を割り当てると全ての暗号機ページに即時反映されます（解読中ループ / 解読完了 / スキルチェック出現・成功・失敗）。「未割当（初期音）」に戻すと内蔵のデフォルト音が使われます。',
               style: TextStyle(fontSize: 12, color: AppColors.dashGrey),
             ),
             const SizedBox(height: 14),
