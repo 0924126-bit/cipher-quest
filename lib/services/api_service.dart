@@ -59,9 +59,10 @@ class ApiService {
     int? durationSec,
     String? design,
     double? speedMultiplier,
-    bool? rhythmEnabled,
-    double? rhythmSuccessBonus,
-    double? rhythmFailPenalty,
+    bool? skillEnabled,
+    int? skillDifficulty,
+    double? skillSuccessBonus,
+    double? skillFailPenalty,
   }) async {
     final res = await http.patch(
       _u('/api/machines/$id'),
@@ -71,11 +72,12 @@ class ApiService {
         if (durationSec != null) 'duration_sec': durationSec,
         if (design != null) 'design': design,
         if (speedMultiplier != null) 'speed_multiplier': speedMultiplier,
-        if (rhythmEnabled != null) 'rhythm_enabled': rhythmEnabled,
-        if (rhythmSuccessBonus != null)
-          'rhythm_success_bonus': rhythmSuccessBonus,
-        if (rhythmFailPenalty != null)
-          'rhythm_fail_penalty': rhythmFailPenalty,
+        if (skillEnabled != null) 'skill_enabled': skillEnabled,
+        if (skillDifficulty != null) 'skill_difficulty': skillDifficulty,
+        if (skillSuccessBonus != null)
+          'skill_success_bonus': skillSuccessBonus,
+        if (skillFailPenalty != null)
+          'skill_fail_penalty': skillFailPenalty,
       }),
     );
     if (res.statusCode != 200) throw Exception('failed to update machine');
