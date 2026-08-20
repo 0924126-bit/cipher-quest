@@ -40,11 +40,19 @@ def clamp_speed(v) -> float:
 
 
 def clamp_pct(v, default: float) -> float:
-    """Rhythm-game reward/penalty in percent points (0..30)."""
+    """Skill-check reward/penalty in percent points (0..30)."""
     try:
         return max(0.0, min(30.0, round(float(v), 1)))
     except (TypeError, ValueError):
         return default
+
+
+def clamp_difficulty(v) -> int:
+    """Skill-check difficulty level 1 (easy) .. 5 (hell)."""
+    try:
+        return max(1, min(5, int(v)))
+    except (TypeError, ValueError):
+        return 2
 
 
 def _now_ms() -> int:
@@ -72,13 +80,21 @@ class MachineStore:
                         m["status"] = "paused"
                     # migrate old records that predate the design field
                     m["design"] = sanitize_design(m.get("design"))
-                    # migrate records that predate speed / rhythm settings
+                    # migrate records that predate speed / skill-check settings
                     m["speed_multiplier"] = clamp_speed(m.get("speed_multiplier", 1.0))
-                    m["rhythm_enabled"] = bool(m.get("rhythm_enabled", True))
-                    m["rhythm_success_bonus"] = clamp_pct(
-                        m.get("rhythm_success_bonus", 5.0), 5.0)
-                    m["rhythm_fail_penalty"] = clamp_pct(
-                        m.get("rhythm_fail_penalty", 2.0), 2.0)
+                    m["skill_enabled"] = bool(
+                        m.get("skill_enabled", m.get("rhythm_enabled", True)))
+                    m["skill_difficulty"] = clamp_difficulty(
+                        m.get("skill_difficulty", 2))
+                    m["skill_success_bonus"] = clamp_pct(
+                        m.get("skill_success_bonus",
+                              m.get("rhythm_success_bonus", 5.0)), 5.0)
+                    m["skill_fail_penalty"] = clamp_pct(
+                        m.get("skill_fail_penalty",
+                              m.get("rhythm_fail_penalty", 2.0)), 2.0)
+                    m.pop("rhythm_enabled", None)
+                    m.pop("rhythm_success_bonus", None)
+                    m.pop("rhythm_fail_penalty", None)
             except Exception:
                 self.machines = {}
                 self.events = []
@@ -110,9 +126,10 @@ class MachineStore:
                 "duration_sec": max(5, min(3600, int(duration_sec))),
                 "design": sanitize_design(design),
                 "speed_multiplier": 1.0,   # decode speed (1.0 = 100%)
-                "rhythm_enabled": True,    # rhythm mini-game available
-                "rhythm_success_bonus": 5.0,   # +% on rhythm success
-                "rhythm_fail_penalty": 2.0,    # -% on rhythm fail
+                "skill_enabled": True,     # random skill checks while holding
+                "skill_difficulty": 2,     # 1 (easy) .. 5 (hell)
+                "skill_success_bonus": 5.0,   # +% on skill check success
+                "skill_fail_penalty": 2.0,    # -% on skill check miss
                 "progress": 0.0,          # 0-100
                 "status": "idle",          # idle / decoding / paused / completed
                 "connected": False,
@@ -127,8 +144,9 @@ class MachineStore:
             return machine
 
     def update_settings(self, machine_id, name=None, duration_sec=None, design=None,
-                        speed_multiplier=None, rhythm_enabled=None,
-                        rhythm_success_bonus=None, rhythm_fail_penalty=None):
+                        speed_multiplier=None, skill_enabled=None,
+                        skill_difficulty=None,
+                        skill_success_bonus=None, skill_fail_penalty=None):
         with _lock:
             m = self.machines.get(machine_id)
             if not m:
@@ -141,12 +159,14 @@ class MachineStore:
                 m["design"] = sanitize_design(design)
             if speed_multiplier is not None:
                 m["speed_multiplier"] = clamp_speed(speed_multiplier)
-            if rhythm_enabled is not None:
-                m["rhythm_enabled"] = bool(rhythm_enabled)
-            if rhythm_success_bonus is not None:
-                m["rhythm_success_bonus"] = clamp_pct(rhythm_success_bonus, 5.0)
-            if rhythm_fail_penalty is not None:
-                m["rhythm_fail_penalty"] = clamp_pct(rhythm_fail_penalty, 2.0)
+            if skill_enabled is not None:
+                m["skill_enabled"] = bool(skill_enabled)
+            if skill_difficulty is not None:
+                m["skill_difficulty"] = clamp_difficulty(skill_difficulty)
+            if skill_success_bonus is not None:
+                m["skill_success_bonus"] = clamp_pct(skill_success_bonus, 5.0)
+            if skill_fail_penalty is not None:
+                m["skill_fail_penalty"] = clamp_pct(skill_fail_penalty, 2.0)
             m["updated_at"] = _now_ms()
             self._save()
             return m
