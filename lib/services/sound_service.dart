@@ -1,15 +1,16 @@
 import 'sound_service_stub.dart'
     if (dart.library.js_interop) 'sound_service_web.dart';
 
-/// App-wide sound player fed by operator-uploaded mp3 files.
+/// App-wide sound player fed by the server's role->url map.
 ///
-/// The server pushes a role->url map ("sounds" websocket message /
-/// init payload); we mirror it here and play by role name:
-///   decode   - loop while holding the machine
-///   complete - one-shot on 100%
-///   rhythm   - mini-game BGM (loop)
-///   success  - one-shot on rhythm success
-///   fail     - one-shot on rhythm fail
+/// Every role has a built-in default (shipped at /audio/*.mp3); operators
+/// can override each one with an uploaded mp3 and revert at any time.
+/// Roles:
+///   decode        - loop while holding the machine
+///   complete      - one-shot on 100%
+///   skill_warn    - short cue when a skill check appears
+///   skill_success - one-shot on skill check success
+///   skill_fail    - one-shot on skill check miss
 class SoundService {
   SoundService._();
   static final SoundService instance = SoundService._();
@@ -22,9 +23,9 @@ class SoundService {
     for (final role in const [
       'decode',
       'complete',
-      'rhythm',
-      'success',
-      'fail',
+      'skill_warn',
+      'skill_success',
+      'skill_fail',
     ]) {
       final v = roles[role];
       _backend.setSource(role, v is String && v.isNotEmpty ? v : null);
@@ -41,13 +42,10 @@ class SoundService {
     _backend.play('complete');
   }
 
-  void startRhythmBgm() => _backend.play('rhythm', loop: true);
-  void stopRhythmBgm() => _backend.stop('rhythm');
+  void playSkillWarn() => _backend.play('skill_warn');
 
-  void playRhythmResult(bool success) {
-    _backend.stop('rhythm');
-    _backend.play(success ? 'success' : 'fail');
-  }
+  void playSkillResult(bool success) =>
+      _backend.play(success ? 'skill_success' : 'skill_fail');
 
   void stopAll() => _backend.stopAll();
 }
