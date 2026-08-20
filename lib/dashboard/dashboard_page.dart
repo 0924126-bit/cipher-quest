@@ -40,14 +40,15 @@ class _DashboardPageState extends State<DashboardPage> {
       result.durationSec,
       design: result.design,
     );
-    // machine id is assigned server-side; rhythm settings ride on update
+    // machine id is assigned server-side; skill check settings ride on update
     final created = _ctrl.machines.isEmpty ? null : _ctrl.machines.last;
     if (created != null) {
       await _ctrl.updateMachine(
         created.id,
-        rhythmEnabled: result.rhythmEnabled,
-        rhythmSuccessBonus: result.rhythmSuccessBonus,
-        rhythmFailPenalty: result.rhythmFailPenalty,
+        skillEnabled: result.skillEnabled,
+        skillDifficulty: result.skillDifficulty,
+        skillSuccessBonus: result.skillSuccessBonus,
+        skillFailPenalty: result.skillFailPenalty,
       );
     }
   }
@@ -60,9 +61,10 @@ class _DashboardPageState extends State<DashboardPage> {
       name: result.name,
       durationSec: result.durationSec,
       design: result.design,
-      rhythmEnabled: result.rhythmEnabled,
-      rhythmSuccessBonus: result.rhythmSuccessBonus,
-      rhythmFailPenalty: result.rhythmFailPenalty,
+      skillEnabled: result.skillEnabled,
+      skillDifficulty: result.skillDifficulty,
+      skillSuccessBonus: result.skillSuccessBonus,
+      skillFailPenalty: result.skillFailPenalty,
     );
   }
 
@@ -517,8 +519,8 @@ class _EventFeed extends StatelessWidget {
         return Icons.restart_alt;
       case 'skill_miss':
         return Icons.flash_on;
-      case 'rhythm_success':
-        return Icons.music_note;
+      case 'skill_success':
+        return Icons.bolt;
       case 'speed':
         return Icons.speed;
       case 'sound':
@@ -537,7 +539,7 @@ class _EventFeed extends StatelessWidget {
       case 'disconnected':
       case 'skill_miss':
         return AppColors.dashAmber;
-      case 'rhythm_success':
+      case 'skill_success':
         return AppColors.dashGreen;
       case 'speed':
       case 'sound':
