@@ -4,9 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 /// App-wide color definitions.
 ///
 /// Decoder page: calm "old workshop" palette (Identity V cipher machine mood).
-/// Dashboard: dark cave × Identity V operator console. Warm lantern light
-/// against deep cave rock, aged paper text, vermilion accents — designed to
-/// feel like a hand-crafted Japanese festival control room, not a template.
+/// Dashboard: clean white Japanese business UI — white surfaces, hairline
+/// borders, indigo (藍色) as the single accent color, plenty of whitespace.
+/// Looks like a hand-built Japanese SaaS admin, not an AI template.
 class AppColors {
   // ---- Decoder (quiet workshop) ----
   /// Page background top / bottom.
@@ -30,27 +30,27 @@ class AppColors {
   /// Success green lamp on completion.
   static const lamp = Color(0xFF7FB069);
 
-  // ---- Dashboard (cave operator console) ----
-  /// Deep cave background / slightly lit panel rock.
-  static const dashBg = Color(0xFF121110);
-  static const dashSurface = Color(0xFF1C1A17);
-  static const dashSurfaceHi = Color(0xFF262320);
+  // ---- Dashboard (white Japanese business UI) ----
+  /// Page background / card surface / raised input surface.
+  static const dashBg = Color(0xFFF6F7F9);
+  static const dashSurface = Colors.white;
+  static const dashSurfaceHi = Color(0xFFF1F3F6);
 
-  /// Aged paper ink & secondary text.
-  static const dashInk = Color(0xFFE4DFD1);
-  static const dashGrey = Color(0xFF8D877A);
+  /// Text: near-black ink & secondary grey.
+  static const dashInk = Color(0xFF23272E);
+  static const dashGrey = Color(0xFF757D89);
 
-  /// Hairline borders like old brass fittings.
-  static const dashLine = Color(0xFF37332C);
+  /// Hairline borders.
+  static const dashLine = Color(0xFFE4E7EC);
 
-  /// Lantern amber = primary action color.
-  static const dashBlue = Color(0xFFD9A441); // primary (kept name for compat)
-  static const dashGreen = Color(0xFF7FB069);
-  static const dashRed = Color(0xFFC94F43);
-  static const dashAmber = Color(0xFFD9A441);
+  /// 藍色 indigo = the single accent color (kept name for compatibility).
+  static const dashBlue = Color(0xFF31589F);
+  static const dashGreen = Color(0xFF2E7D46);
+  static const dashRed = Color(0xFFC5392C);
+  static const dashAmber = Color(0xFFB7791F);
 
   /// Curse purple for the cursed-role accents.
-  static const dashCurse = Color(0xFF9B59D0);
+  static const dashCurse = Color(0xFF7A3FB5);
 }
 
 class AppTheme {
@@ -72,31 +72,34 @@ class AppTheme {
     );
   }
 
-  /// Cave operator console theme for the dashboard.
+  /// White Japanese business UI for the dashboard.
   static ThemeData dashboard() {
-    final base = ThemeData.dark(useMaterial3: true);
+    final base = ThemeData.light(useMaterial3: true);
     final text = GoogleFonts.notoSansJpTextTheme(base.textTheme);
     return base.copyWith(
       scaffoldBackgroundColor: AppColors.dashBg,
       colorScheme: base.colorScheme.copyWith(
-        primary: AppColors.dashAmber,
+        primary: AppColors.dashBlue,
         secondary: AppColors.dashCurse,
         surface: AppColors.dashSurface,
         error: AppColors.dashRed,
-        onPrimary: const Color(0xFF1C1408),
+        onPrimary: Colors.white,
       ),
       textTheme: text.apply(
         bodyColor: AppColors.dashInk,
         displayColor: AppColors.dashInk,
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.dashBg,
+        backgroundColor: Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         foregroundColor: AppColors.dashInk,
+        shape: Border(
+          bottom: BorderSide(color: AppColors.dashLine),
+        ),
       ),
       cardTheme: CardThemeData(
-        color: AppColors.dashSurface,
+        color: Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
@@ -111,8 +114,8 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.dashAmber,
-          foregroundColor: const Color(0xFF1C1408),
+          backgroundColor: AppColors.dashBlue,
+          foregroundColor: Colors.white,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
           textStyle: const TextStyle(fontWeight: FontWeight.w700),
@@ -125,6 +128,7 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.dashInk,
           side: const BorderSide(color: AppColors.dashLine),
+          backgroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(6),
@@ -133,7 +137,7 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.dashAmber,
+          foregroundColor: AppColors.dashBlue,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -151,11 +155,11 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(6),
-          borderSide: const BorderSide(color: AppColors.dashAmber, width: 1.5),
+          borderSide: const BorderSide(color: AppColors.dashBlue, width: 1.5),
         ),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: AppColors.dashSurface,
+        backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
@@ -163,30 +167,30 @@ class AppTheme {
         ),
       ),
       snackBarTheme: const SnackBarThemeData(
-        backgroundColor: AppColors.dashSurfaceHi,
-        contentTextStyle: TextStyle(color: AppColors.dashInk),
+        backgroundColor: AppColors.dashInk,
+        contentTextStyle: TextStyle(color: Colors.white),
         behavior: SnackBarBehavior.floating,
       ),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) =>
             states.contains(WidgetState.selected)
-                ? AppColors.dashAmber
-                : AppColors.dashGrey),
+                ? AppColors.dashBlue
+                : Colors.white),
         trackColor: WidgetStateProperty.resolveWith((states) =>
             states.contains(WidgetState.selected)
-                ? AppColors.dashAmber.withValues(alpha: 0.4)
+                ? AppColors.dashBlue.withValues(alpha: 0.35)
                 : AppColors.dashLine),
       ),
       sliderTheme: SliderThemeData(
-        activeTrackColor: AppColors.dashAmber,
+        activeTrackColor: AppColors.dashBlue,
         inactiveTrackColor: AppColors.dashLine,
-        thumbColor: AppColors.dashAmber,
-        overlayColor: AppColors.dashAmber.withValues(alpha: 0.15),
+        thumbColor: AppColors.dashBlue,
+        overlayColor: AppColors.dashBlue.withValues(alpha: 0.12),
       ),
       tabBarTheme: const TabBarThemeData(
-        labelColor: AppColors.dashAmber,
+        labelColor: AppColors.dashBlue,
         unselectedLabelColor: AppColors.dashGrey,
-        indicatorColor: AppColors.dashAmber,
+        indicatorColor: AppColors.dashBlue,
         dividerColor: AppColors.dashLine,
       ),
     );
