@@ -204,8 +204,13 @@ class DecoderController extends ChangeNotifier {
     if (!holding || completed) return;
 
     final now = DateTime.now();
-    final dt = now.difference(_lastTick).inMilliseconds / 1000.0;
+    var dt = now.difference(_lastTick).inMilliseconds / 1000.0;
     _lastTick = now;
+
+    // Safety: if the tab was suspended (browser throttling) the elapsed
+    // time can be huge - a single tick would then jump the progress far
+    // ahead, looking like the machine "decoded itself". Cap the step.
+    if (dt > 0.5) dt = 0.0;
 
     progress = (progress + _ratePerSec * dt).clamp(0, 100);
     if (completed) {
