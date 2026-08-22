@@ -1,5 +1,5 @@
-name: cipher_quest
-description: "Identity V themed cipher machine decoding app for school festival"
+name: identity_e
+description: "Identity E - school festival role terminal and cipher machine app"
 publish_to: 'none'
 version: 1.0.0+1
 
