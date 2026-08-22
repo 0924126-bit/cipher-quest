@@ -1,29 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="description" content="Cipher Quest - Identity V style decoding experience">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="cipher_quest">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
@@ -50,11 +38,83 @@
       background: #060608;
       margin: 0;
       overflow: hidden;
+      height: 100%;
     }
     img { -webkit-user-drag: none; user-drag: none; }
+
+    /* ---------- boot loading screen ---------- */
+    #boot {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 50% 40%, #1d1a15 0%, #0e0d0b 70%);
+      z-index: 9999;
+      transition: opacity .45s ease;
+      font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
+    }
+    #boot.hide { opacity: 0; pointer-events: none; }
+    #boot .title {
+      color: #d9a441;
+      font-size: 26px;
+      letter-spacing: 10px;
+      margin-bottom: 6px;
+      text-shadow: 0 0 24px rgba(217,164,65,.45);
+    }
+    #boot .sub {
+      color: #837e70;
+      font-size: 12px;
+      letter-spacing: 4px;
+      margin-bottom: 36px;
+    }
+    #boot .barwrap {
+      width: min(240px, 60vw);
+      height: 3px;
+      background: #2a2620;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    #boot .bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #6e5526, #d9a441);
+      border-radius: 2px;
+      transition: width .3s ease;
+    }
+    #boot .pct {
+      color: #837e70;
+      font-size: 11px;
+      letter-spacing: 2px;
+      margin-top: 14px;
+    }
+    #boot .lamp {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #d9a441;
+      box-shadow: 0 0 14px 3px rgba(217,164,65,.6);
+      margin-bottom: 28px;
+      animation: flicker 2.2s infinite;
+    }
+    @keyframes flicker {
+      0%, 100% { opacity: 1; }
+      42% { opacity: .55; }
+      45% { opacity: .95; }
+      70% { opacity: .7; }
+    }
   </style>
 </head>
 <body>
+  <!-- boot loading screen: shown instantly, removed when Flutter first frame renders -->
+  <div id="boot">
+    <div class="lamp"></div>
+    <div class="title">CIPHER QUEST</div>
+    <div class="sub">読み込んでいます…</div>
+    <div class="barwrap"><div class="bar" id="bootbar"></div></div>
+    <div class="pct" id="bootpct">0%</div>
+  </div>
+
   <script>
     // Block browser context menu (right-click / touch long-press "translate, copy..." popup)
     window.addEventListener('contextmenu', function (e) { e.preventDefault(); }, { capture: true });
@@ -63,6 +123,29 @@
     // Block double-tap zoom / pinch gestures interfering with hold-to-decode
     document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
     document.addEventListener('dblclick', function (e) { e.preventDefault(); }, { capture: true });
+
+    // Fake-but-honest progress: advances while scripts download, jumps to 100 on first frame.
+    (function () {
+      var pct = 0;
+      var bar = document.getElementById('bootbar');
+      var label = document.getElementById('bootpct');
+      var timer = setInterval(function () {
+        // ease towards 90% while loading
+        pct += Math.max(0.4, (90 - pct) * 0.045);
+        if (pct > 90) pct = 90;
+        bar.style.width = pct + '%';
+        label.textContent = Math.round(pct) + '%';
+      }, 200);
+
+      window.addEventListener('flutter-first-frame', function () {
+        clearInterval(timer);
+        bar.style.width = '100%';
+        label.textContent = '100%';
+        var boot = document.getElementById('boot');
+        setTimeout(function () { boot.classList.add('hide'); }, 150);
+        setTimeout(function () { boot.remove(); }, 700);
+      });
+    })();
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
