@@ -20,6 +20,7 @@ from pydantic import BaseModel
 
 from store import store
 from sounds import SOUNDS_DIR, sound_store
+from roles import IMAGES_DIR, role_store
 from connections import manager
 from game.routes import router as game_router, pump_loop
 
@@ -85,6 +86,14 @@ class SpeedUpdate(BaseModel):
 
 class SoundRole(BaseModel):
     role: str
+
+
+class RolePatch(BaseModel):
+    title: str | None = None
+    subtitle: str | None = None
+    alarm_sec: int | None = None
+    cooldown_sec: int | None = None
+    notify_message: str | None = None
 
 
 # ---------- REST endpoints ----------
@@ -236,6 +245,59 @@ async def _notify_sounds():
     await manager.broadcast_dashboards(payload)
 
 
+# ---------- REST: role pages (chaser / cursed / hunter) ----------
+@app.get("/api/roles")
+async def get_roles():
+    return {"roles": role_store.get_config(),
+            "recent_curses": role_store.recent_curses()}
+
+
+@app.patch("/api/roles/{role}")
+async def patch_role(role: str, body: RolePatch):
+    block = role_store.update(role, body.model_dump(exclude_none=True))
+    if block is None:
+        raise HTTPException(404, "role not found")
+    await _notify_roles()
+    return block
+
+
+@app.post("/api/roles/cursed/press")
+async def press_curse():
+    """Curse button pressed -> notify dashboards + hunter phones (with sound)."""
+    ev = role_store.record_curse()
+    store.add_event("", "curse", ev["message"])
+    payload = {"type": "curse", "event": ev}
+    await manager.broadcast_dashboards(payload)
+    await manager.broadcast_hunters(payload)
+    return {"ok": True, "event": ev,
+            "cooldown_sec": role_store.get_config()["cursed"]["cooldown_sec"]}
+
+
+@app.post("/api/roles/cursed/image")
+async def upload_curse_image(file: UploadFile = File(...)):
+    data = await file.read()
+    try:
+        url = role_store.save_button_image(file.filename or "", data)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    await _notify_roles()
+    return {"ok": True, "button_image": url}
+
+
+@app.delete("/api/roles/cursed/image")
+async def delete_curse_image():
+    role_store.clear_button_image()
+    await _notify_roles()
+    return {"ok": True}
+
+
+async def _notify_roles():
+    """Push updated role config to dashboards + hunter phones live."""
+    payload = {"type": "roles", "roles": role_store.get_config()}
+    await manager.broadcast_dashboards(payload)
+    await manager.broadcast_hunters(payload)
+
+
 # ---------- WebSocket: machine (exclusive) ----------
 @app.websocket("/ws/machine/{machine_id}")
 async def ws_machine(ws: WebSocket, machine_id: str):
@@ -335,8 +397,32 @@ async def ws_dashboard(ws: WebSocket):
         manager.disconnect_dashboard(ws)
 
 
+# ---------- WebSocket: hunter phone ----------
+@app.websocket("/ws/hunter")
+async def ws_hunter(ws: WebSocket):
+    await ws.accept()
+    await manager.connect_hunter(ws)
+    await ws.send_json({
+        "type": "init",
+        "roles": role_store.get_config(),
+        "recent_curses": role_store.recent_curses(),
+    })
+    try:
+        while True:
+            data = await ws.receive_json()
+            if data.get("type") == "ping":
+                await ws.send_json({"type": "pong"})
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        manager.disconnect_hunter(ws)
+
+
 # ---------- Static sound files ----------
 app.mount("/sounds", StaticFiles(directory=SOUNDS_DIR), name="sounds")
+app.mount("/role_images", StaticFiles(directory=IMAGES_DIR), name="role_images")
 
 
 # ---------- Static Flutter web ----------
