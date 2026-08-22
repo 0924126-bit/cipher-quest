@@ -163,6 +163,40 @@
       }, { passive: true });
     })();
 
+    // ---- back-swipe / back-navigation blocker (role pages only) ----
+    // iPhone/Android edge-swipe-back must not leave the role screen.
+    // 1) touchstart near screen edges is cancelled before the browser
+    //    can start its swipe-back gesture (iOS Safari standalone/PWA).
+    // 2) history is pinned: every popstate immediately pushes forward
+    //    again, so hardware/gesture back never exits the role page.
+    (function () {
+      function onRolePage() {
+        var h = window.location.hash || '';
+        return /^#\/(role|chaser|cursed|hunter)/.test(h);
+      }
+      // 1) edge-swipe suppression
+      document.addEventListener('touchstart', function (e) {
+        if (!onRolePage()) return;
+        var t = e.touches && e.touches[0];
+        if (!t) return;
+        var edge = 28; // px from either horizontal edge
+        if (t.clientX <= edge || t.clientX >= window.innerWidth - edge) {
+          e.preventDefault();
+        }
+      }, { passive: false, capture: true });
+      // 2) history pinning
+      function pin() {
+        try { history.pushState({ roleLock: 1 }, '', window.location.href); } catch (_) {}
+      }
+      window.addEventListener('hashchange', function () {
+        if (onRolePage()) pin();
+      });
+      window.addEventListener('popstate', function () {
+        if (onRolePage()) pin();
+      });
+      if (onRolePage()) pin();
+    })();
+
     // Fake-but-honest progress: advances while scripts download, jumps to 100 on first frame.
     (function () {
       var pct = 0;
