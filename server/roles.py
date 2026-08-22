@@ -104,12 +104,40 @@ class RoleStore:
             return json.loads(json.dumps(block))
 
     # ---------- curse button image ----------
+    @staticmethod
+    def _shrink_image(data: bytes, ext: str) -> tuple:
+        """Downscale big photos to <=512px WebP so phones load them fast.
+
+        Returns (new_data, new_ext). Falls back to the original bytes if
+        Pillow is unavailable or the image can't be parsed.
+        """
+        try:
+            import io
+            from PIL import Image
+            img = Image.open(io.BytesIO(data))
+            img.load()
+            # keep small images as-is
+            if max(img.size) <= 512 and len(data) <= 300 * 1024:
+                return data, ext
+            img.thumbnail((512, 512), Image.LANCZOS)
+            if img.mode not in ("RGB", "RGBA"):
+                img = img.convert("RGBA")
+            out = io.BytesIO()
+            img.save(out, format="WEBP", quality=85, method=4)
+            return out.getvalue(), ".webp"
+        except Exception:
+            return data, ext
+
     def save_button_image(self, filename: str, data: bytes) -> str:
         ext = os.path.splitext(filename or "")[1].lower()
         if ext not in ALLOWED_IMAGE_EXT:
             raise ValueError("png / jpg / webp / gif の画像のみ使用できます")
         if len(data) > MAX_IMAGE_BYTES:
             raise ValueError("画像は8MB以下にしてください")
+        # The button renders at ~250px; shrink huge camera photos so phones
+        # don't download megabytes for a small circle. GIFs keep animation.
+        if ext != ".gif":
+            data, ext = self._shrink_image(data, ext)
         with _lock:
             # remove previous uploaded image files
             for old in os.listdir(IMAGES_DIR):
