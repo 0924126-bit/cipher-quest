@@ -1,0 +1,8 @@
+# Cipher Quest backend dependencies
+# NOTE: websockets is REQUIRED - without it uvicorn silently rejects
+# every WebSocket upgrade ("Unsupported upgrade request") and all
+# clients get stuck on endless reconnecting.
+fastapi
+uvicorn
+websockets
+python-multipart
