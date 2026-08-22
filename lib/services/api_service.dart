@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/machine.dart';
+import '../models/role_config.dart';
 import '../models/sound_asset.dart';
 
 /// REST API client. Base URL is same-origin (server hosts the Flutter build).
@@ -178,6 +179,75 @@ class ApiService {
 
   /// Public URL for the 3D game lobby.
   String gameUrl() => '$baseUrl/game/';
+
+  // ---------------- role pages (chaser / cursed / hunter) ----------------
+
+  String chaserUrl() => '$baseUrl/#/chaser';
+  String cursedUrl() => '$baseUrl/#/cursed';
+  String hunterUrl() => '$baseUrl/#/hunter';
+
+  Future<RoleConfig> getRoles() async {
+    final res = await http.get(_u('/api/roles'));
+    if (res.statusCode != 200) throw Exception('failed to get roles');
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    return RoleConfig.fromJson(data['roles'] as Map<String, dynamic>);
+  }
+
+  Future<void> updateRole(
+    String role, {
+    String? title,
+    String? subtitle,
+    int? alarmSec,
+    int? cooldownSec,
+    String? notifyMessage,
+  }) async {
+    final res = await http.patch(
+      _u('/api/roles/$role'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        if (title != null) 'title': title,
+        if (subtitle != null) 'subtitle': subtitle,
+        if (alarmSec != null) 'alarm_sec': alarmSec,
+        if (cooldownSec != null) 'cooldown_sec': cooldownSec,
+        if (notifyMessage != null) 'notify_message': notifyMessage,
+      }),
+    );
+    if (res.statusCode != 200) throw Exception('failed to update role');
+  }
+
+  /// Fire the curse. Returns the server-confirmed cooldown seconds.
+  Future<int> pressCurse() async {
+    final res = await http.post(_u('/api/roles/cursed/press'));
+    if (res.statusCode != 200) throw Exception('failed to press curse');
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    return (data['cooldown_sec'] as num?)?.toInt() ?? 30;
+  }
+
+  Future<String> uploadCurseImage({
+    required String filename,
+    required List<int> bytes,
+  }) async {
+    final req = http.MultipartRequest('POST', _u('/api/roles/cursed/image'))
+      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+    if (res.statusCode != 200) {
+      String detail = '画像のアップロードに失敗しました';
+      try {
+        final body =
+            jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+        detail = (body['detail'] as String?) ?? detail;
+      } catch (_) {}
+      throw Exception(detail);
+    }
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    return (data['button_image'] as String?) ?? '';
+  }
+
+  Future<void> deleteCurseImage() async {
+    final res = await http.delete(_u('/api/roles/cursed/image'));
+    if (res.statusCode != 200) throw Exception('failed to delete image');
+  }
 
   // ---------------- 3D game admin ----------------
 
