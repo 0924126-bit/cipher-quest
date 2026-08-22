@@ -225,19 +225,18 @@ class _DashboardPageState extends State<DashboardPage> {
           child: Row(
             children: [
               // brand
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: AppColors.dashBlue,
-                  borderRadius: BorderRadius.circular(6),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.asset(
+                  'assets/images/identity_e_logo.png',
+                  width: 30,
+                  height: 30,
+                  filterQuality: FilterQuality.medium,
                 ),
-                child: const Icon(Icons.memory,
-                    color: Colors.white, size: 17),
               ),
               const SizedBox(width: 10),
               const Text(
-                'Cipher Quest',
+                'Identity E',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
