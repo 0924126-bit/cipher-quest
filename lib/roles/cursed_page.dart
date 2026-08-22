@@ -7,7 +7,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/role_config.dart';
 import '../services/alarm_service.dart';
 import '../services/api_service.dart';
-import '../theme/app_theme.dart';
 
 /// 呪術師用ページ。
 ///
