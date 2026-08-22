@@ -8,6 +8,11 @@ from pydantic import BaseModel
 from .config import game_config as gc
 from .match import match
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from auth import auth_store, token_from_ws  # noqa: E402
+
 router = APIRouter()
 
 
@@ -56,6 +61,9 @@ async def force_end():
 # --------------------------------------------------------------------------
 @router.websocket("/ws/game")
 async def ws_game(ws: WebSocket):
+    if not auth_store.check_token(token_from_ws(ws)):
+        await ws.close(code=4401)
+        return
     await ws.accept()
     player = None
     try:
@@ -131,6 +139,9 @@ async def ws_game(ws: WebSocket):
 # --------------------------------------------------------------------------
 @router.websocket("/ws/game/spectate")
 async def ws_game_spectate(ws: WebSocket):
+    if not auth_store.check_token(token_from_ws(ws)):
+        await ws.close(code=4401)
+        return
     await ws.accept()
     match.spectators.append(ws)
     await ws.send_text(json.dumps(
