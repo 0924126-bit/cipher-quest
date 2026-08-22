@@ -17,10 +17,11 @@ from fastapi import (FastAPI, File, Form, HTTPException, UploadFile,
                      WebSocket, WebSocketDisconnect)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.requests import Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from auth import auth_store, token_from_request, token_from_ws
 from store import store
 from sounds import SOUNDS_DIR, sound_store
 from roles import IMAGES_DIR, role_store
@@ -44,6 +45,53 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---------- site-wide auth gate ----------
+# Every /api/* call needs a valid bearer token, except the endpoints
+# the login screen itself needs. Static files stay open so the app
+# shell can load and show the lock screen (the data behind it is
+# what's protected). WebSockets check the token at handshake time.
+_AUTH_EXEMPT = {"/api/auth/login", "/api/auth/check", "/api/health"}
+
+
+@app.middleware("http")
+async def _auth_gate(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/api/") and path not in _AUTH_EXEMPT:
+        if not auth_store.check_token(token_from_request(request)):
+            return JSONResponse(
+                {"detail": "authentication required"}, status_code=401)
+    return await call_next(request)
+
+
+class LoginBody(BaseModel):
+    password: str
+
+
+class PasswordChangeBody(BaseModel):
+    old_password: str
+    new_password: str
+
+
+@app.post("/api/auth/login")
+async def auth_login(body: LoginBody):
+    if not auth_store.check_password(body.password):
+        raise HTTPException(401, "パスワードが違います")
+    return {"token": auth_store.issue_token()}
+
+
+@app.post("/api/auth/check")
+async def auth_check(request: Request):
+    return {"ok": auth_store.check_token(token_from_request(request))}
+
+
+@app.post("/api/auth/change")
+async def auth_change(body: PasswordChangeBody):
+    # middleware already verified the session token
+    if not auth_store.change_password(body.old_password, body.new_password):
+        raise HTTPException(
+            400, "現在のパスワードが違うか、新しいパスワードが短すぎます（4文字以上）")
+    return {"ok": True}
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "build", "web")
 
@@ -307,6 +355,9 @@ async def _notify_roles():
 # ---------- WebSocket: machine (exclusive) ----------
 @app.websocket("/ws/machine/{machine_id}")
 async def ws_machine(ws: WebSocket, machine_id: str):
+    if not auth_store.check_token(token_from_ws(ws)):
+        await ws.close(code=4401)
+        return
     await ws.accept()
     m = store.get(machine_id)
     if not m:
@@ -381,6 +432,9 @@ async def ws_machine(ws: WebSocket, machine_id: str):
 # ---------- WebSocket: dashboard ----------
 @app.websocket("/ws/dashboard")
 async def ws_dashboard(ws: WebSocket):
+    if not auth_store.check_token(token_from_ws(ws)):
+        await ws.close(code=4401)
+        return
     await ws.accept()
     await manager.connect_dashboard(ws)
     machines = [machine_public(m) for m in store.list_machines()]
@@ -406,6 +460,9 @@ async def ws_dashboard(ws: WebSocket):
 # ---------- WebSocket: hunter phone ----------
 @app.websocket("/ws/hunter")
 async def ws_hunter(ws: WebSocket):
+    if not auth_store.check_token(token_from_ws(ws)):
+        await ws.close(code=4401)
+        return
     await ws.accept()
     await manager.connect_hunter(ws)
     await ws.send_json({
