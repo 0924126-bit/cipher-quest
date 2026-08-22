@@ -1,4 +1,4 @@
-"""Cipher Quest backend - FastAPI
+"""Identity E backend - FastAPI
 
 Serves:
 - REST API      /api/*        (machine CRUD, QR data)
@@ -27,7 +27,7 @@ from roles import IMAGES_DIR, role_store
 from connections import manager
 from game.routes import router as game_router, pump_loop
 
-app = FastAPI(title="Cipher Quest API")
+app = FastAPI(title="Identity E API")
 app.include_router(game_router)
 
 
