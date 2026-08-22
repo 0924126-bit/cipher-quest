@@ -67,6 +67,20 @@ class _IdentityEAppState extends State<IdentityEApp> {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dashboard(),
       initialRoute: pwa ? '/role' : '/',
+      // ---- site-wide password gate ----
+      // builder rebuilds on every setState (unlike onGenerateRoute,
+      // which only runs when a route is pushed), so the lock screen
+      // appears as soon as the token check finishes. The routed pages
+      // below are not inserted into the tree until unlocked.
+      builder: (context, child) {
+        if (_auth == _AuthState.checking) {
+          return const _AuthSplash();
+        }
+        if (_auth == _AuthState.locked) {
+          return LockScreen(onUnlocked: _unlocked);
+        }
+        return child ?? const SizedBox.shrink();
+      },
       onGenerateRoute: (settings) {
         final name = settings.name ?? '/';
         final uri = Uri.parse(name);
@@ -79,17 +93,6 @@ class _IdentityEAppState extends State<IdentityEApp> {
                   FadeTransition(opacity: anim, child: child),
               transitionDuration: const Duration(milliseconds: 400),
             );
-
-        // ---- site-wide password gate ----
-        // Nothing is reachable until authenticated. While the stored
-        // token is being validated show a minimal splash instead of
-        // flashing the lock screen.
-        if (_auth == _AuthState.checking) {
-          return fade(const _AuthSplash());
-        }
-        if (_auth == _AuthState.locked) {
-          return fade(LockScreen(onUnlocked: _unlocked));
-        }
 
         // ---- PWA (installed app) = role-only terminal ----
         // Any non-role route falls back to the role selector.
