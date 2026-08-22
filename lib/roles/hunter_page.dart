@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../models/role_config.dart';
 import '../services/alarm_service.dart';
+import '../services/fullscreen_service.dart';
 import '../services/socket_service.dart';
 import '../theme/app_theme.dart';
 
@@ -106,7 +107,9 @@ class _HunterPageState extends State<HunterPage>
       DateTime.now().millisecondsSinceEpoch < _flashUntilMs;
 
   /// ブラウザの自動再生制限を解除するため、最初に1タップさせる。
+  /// 同じジェスチャで全画面化も行う。
   void _armSound() {
+    FullscreenService.instance.enter();
     AlarmService.instance.playCurseSting();
     setState(() => _soundArmed = true);
   }
@@ -139,7 +142,20 @@ class _HunterPageState extends State<HunterPage>
         child: SafeArea(
           child: Column(
             children: [
-              const SizedBox(height: 24),
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: IconButton(
+                    tooltip: '全画面表示',
+                    onPressed: () =>
+                        FullscreenService.instance.toggle(),
+                    icon: const Icon(Icons.fullscreen,
+                        color: AppColors.boneDim, size: 22),
+                  ),
+                ),
+              ),
               _header(),
               const SizedBox(height: 12),
               if (!_soundArmed) _armBanner(),
