@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/machine.dart';
 import '../models/role_config.dart';
 import '../models/sound_asset.dart';
+import 'auth_service.dart';
 
 /// REST API client. Base URL is same-origin (server hosts the Flutter build).
 class ApiService {
@@ -19,8 +20,14 @@ class ApiService {
 
   Uri _u(String path) => Uri.parse('$baseUrl$path');
 
+  /// Auth headers for every API call (site-wide password gate).
+  Map<String, String> get _auth => AuthService.instance.authHeaders;
+
+  Map<String, String> get _authJson =>
+      {'Content-Type': 'application/json', ..._auth};
+
   Future<List<Machine>> listMachines() async {
-    final res = await http.get(_u('/api/machines'));
+    final res = await http.get(_u('/api/machines'), headers: _auth);
     if (res.statusCode != 200) throw Exception('failed to list machines');
     final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
     return (data['machines'] as List)
@@ -29,7 +36,7 @@ class ApiService {
   }
 
   Future<Machine> getMachine(String id) async {
-    final res = await http.get(_u('/api/machines/$id'));
+    final res = await http.get(_u('/api/machines/$id'), headers: _auth);
     if (res.statusCode != 200) throw Exception('machine not found');
     return Machine.fromJson(
         jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>);
@@ -42,7 +49,7 @@ class ApiService {
   }) async {
     final res = await http.post(
       _u('/api/machines'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _authJson,
       body: jsonEncode({
         'name': name,
         'duration_sec': durationSec,
@@ -67,7 +74,7 @@ class ApiService {
   }) async {
     final res = await http.patch(
       _u('/api/machines/$id'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _authJson,
       body: jsonEncode({
         if (name != null) 'name': name,
         if (durationSec != null) 'duration_sec': durationSec,
@@ -90,7 +97,7 @@ class ApiService {
   Future<Machine> nudgeMachineSpeed(String id, double deltaPercent) async {
     final res = await http.post(
       _u('/api/machines/$id/speed'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _authJson,
       body: jsonEncode({'delta_percent': deltaPercent}),
     );
     if (res.statusCode != 200) throw Exception('failed to change speed');
@@ -102,7 +109,7 @@ class ApiService {
   Future<Machine> setMachineSpeed(String id, double multiplier) async {
     final res = await http.post(
       _u('/api/machines/$id/speed'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _authJson,
       body: jsonEncode({'speed_multiplier': multiplier}),
     );
     if (res.statusCode != 200) throw Exception('failed to change speed');
@@ -111,12 +118,12 @@ class ApiService {
   }
 
   Future<void> deleteMachine(String id) async {
-    final res = await http.delete(_u('/api/machines/$id'));
+    final res = await http.delete(_u('/api/machines/$id'), headers: _auth);
     if (res.statusCode != 200) throw Exception('failed to delete machine');
   }
 
   Future<void> resetMachine(String id) async {
-    final res = await http.post(_u('/api/machines/$id/reset'));
+    final res = await http.post(_u('/api/machines/$id/reset'), headers: _auth);
     if (res.statusCode != 200) throw Exception('failed to reset machine');
   }
 
@@ -126,7 +133,7 @@ class ApiService {
   // ---------------- sound assets (mp3) ----------------
 
   Future<List<SoundAsset>> listSounds() async {
-    final res = await http.get(_u('/api/sounds'));
+    final res = await http.get(_u('/api/sounds'), headers: _auth);
     if (res.statusCode != 200) throw Exception('failed to list sounds');
     final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
     return (data['sounds'] as List)
@@ -140,6 +147,7 @@ class ApiService {
     String role = 'none',
   }) async {
     final req = http.MultipartRequest('POST', _u('/api/sounds'))
+      ..headers.addAll(_auth)
       ..fields['role'] = role
       ..files.add(http.MultipartFile.fromBytes(
         'file',
@@ -164,7 +172,7 @@ class ApiService {
   Future<SoundAsset> setSoundRole(String id, String role) async {
     final res = await http.patch(
       _u('/api/sounds/$id'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _authJson,
       body: jsonEncode({'role': role}),
     );
     if (res.statusCode != 200) throw Exception('failed to set sound role');
@@ -173,7 +181,7 @@ class ApiService {
   }
 
   Future<void> deleteSound(String id) async {
-    final res = await http.delete(_u('/api/sounds/$id'));
+    final res = await http.delete(_u('/api/sounds/$id'), headers: _auth);
     if (res.statusCode != 200) throw Exception('failed to delete sound');
   }
 
@@ -187,7 +195,7 @@ class ApiService {
   String hunterUrl() => '$baseUrl/#/hunter';
 
   Future<RoleConfig> getRoles() async {
-    final res = await http.get(_u('/api/roles'));
+    final res = await http.get(_u('/api/roles'), headers: _auth);
     if (res.statusCode != 200) throw Exception('failed to get roles');
     final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
     return RoleConfig.fromJson(data['roles'] as Map<String, dynamic>);
@@ -203,7 +211,7 @@ class ApiService {
   }) async {
     final res = await http.patch(
       _u('/api/roles/$role'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _authJson,
       body: jsonEncode({
         if (title != null) 'title': title,
         if (subtitle != null) 'subtitle': subtitle,
@@ -217,7 +225,7 @@ class ApiService {
 
   /// Fire the curse. Returns the server-confirmed cooldown seconds.
   Future<int> pressCurse() async {
-    final res = await http.post(_u('/api/roles/cursed/press'));
+    final res = await http.post(_u('/api/roles/cursed/press'), headers: _auth);
     if (res.statusCode != 200) throw Exception('failed to press curse');
     final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
     return (data['cooldown_sec'] as num?)?.toInt() ?? 30;
@@ -228,7 +236,9 @@ class ApiService {
     required List<int> bytes,
   }) async {
     final req = http.MultipartRequest('POST', _u('/api/roles/cursed/image'))
-      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+      ..headers.addAll(_auth)
+      ..files.add(
+          http.MultipartFile.fromBytes('file', bytes, filename: filename));
     final streamed = await req.send();
     final res = await http.Response.fromStream(streamed);
     if (res.statusCode != 200) {
@@ -245,14 +255,14 @@ class ApiService {
   }
 
   Future<void> deleteCurseImage() async {
-    final res = await http.delete(_u('/api/roles/cursed/image'));
+    final res = await http.delete(_u('/api/roles/cursed/image'), headers: _auth);
     if (res.statusCode != 200) throw Exception('failed to delete image');
   }
 
   // ---------------- 3D game admin ----------------
 
   Future<Map<String, dynamic>> gameStatus() async {
-    final res = await http.get(_u('/api/game/status'));
+    final res = await http.get(_u('/api/game/status'), headers: _auth);
     if (res.statusCode != 200) throw Exception('failed to get game status');
     return jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
   }
@@ -261,7 +271,7 @@ class ApiService {
       {double? difficulty, bool? autoStart}) async {
     final res = await http.patch(
       _u('/api/game/config'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _authJson,
       body: jsonEncode({
         if (difficulty != null) 'difficulty': difficulty,
         if (autoStart != null) 'auto_start': autoStart,
@@ -272,13 +282,13 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> gameForceStart() async {
-    final res = await http.post(_u('/api/game/force_start'));
+    final res = await http.post(_u('/api/game/force_start'), headers: _auth);
     if (res.statusCode != 200) throw Exception('failed to force start');
     return jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> gameForceEnd() async {
-    final res = await http.post(_u('/api/game/force_end'));
+    final res = await http.post(_u('/api/game/force_end'), headers: _auth);
     if (res.statusCode != 200) throw Exception('failed to force end');
     return jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
   }
