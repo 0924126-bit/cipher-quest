@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import 'auth_service.dart';
+
 /// Thin WebSocket wrapper with JSON messages, auto-reconnect (dashboard only),
 /// and a broadcast stream of decoded messages.
 class SocketService {
@@ -27,7 +29,10 @@ class SocketService {
   String get _wsUrl {
     final base = Uri.base;
     final scheme = base.scheme == 'https' ? 'wss' : 'ws';
-    return '$scheme://${base.host}${base.hasPort ? ':${base.port}' : ''}$path';
+    // site-wide auth: server verifies this token at handshake time
+    final token = Uri.encodeComponent(AuthService.instance.wsToken);
+    return '$scheme://${base.host}${base.hasPort ? ':${base.port}' : ''}'
+        '$path?token=$token';
   }
 
   void connect() {
