@@ -495,7 +495,7 @@ def _static_response(full: str, path: str, request: Request) -> FileResponse:
 
 if os.path.isdir(WEB_DIR):
 
-    @app.get("/{path:path}")
+    @app.api_route("/{path:path}", methods=["GET", "HEAD"])
     async def serve_web(path: str, request: Request):
         full = os.path.join(WEB_DIR, path)
         if path and os.path.isfile(full):
