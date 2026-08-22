@@ -384,7 +384,7 @@ class _DifficultyPicker extends StatelessWidget {
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: selected == level
-                            ? const Color(0xFF1C1408)
+                            ? Colors.white
                             : AppColors.dashBlue,
                       ),
                     ),
@@ -393,7 +393,7 @@ class _DifficultyPicker extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 9.5,
                         color: selected == level
-                            ? const Color(0xFF1C1408).withValues(alpha: 0.75)
+                            ? Colors.white.withValues(alpha: 0.85)
                             : AppColors.dashGrey,
                       ),
                     ),
