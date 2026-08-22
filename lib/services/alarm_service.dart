@@ -14,6 +14,10 @@ class AlarmService {
 
   final AlarmBackend _backend = AlarmBackend();
 
+  /// Force early construction so the mobile audio-unlock gesture
+  /// listeners are installed from app startup (call from main()).
+  void init() {}
+
   /// Start the two-tone siren (call [stopSiren] to end).
   void startSiren() => _backend.startSiren();
 
