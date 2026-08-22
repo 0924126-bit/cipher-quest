@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/role_config.dart';
 import '../services/alarm_service.dart';
 import '../services/api_service.dart';
+import '../services/fullscreen_service.dart';
 import '../theme/app_theme.dart';
 
 /// チェイサー用ページ。
@@ -61,6 +62,8 @@ class _ChaserPageState extends State<ChaserPage>
   }
 
   void _startAlarm() {
+    // ユーザージェスチャのタイミングで全画面化(初回タップ時)
+    FullscreenService.instance.enter();
     if (_alarming) {
       _stopAlarm();
       return;
@@ -119,7 +122,20 @@ class _ChaserPageState extends State<ChaserPage>
                   child: CircularProgressIndicator(color: AppColors.amber))
               : Column(
                   children: [
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: IconButton(
+                          tooltip: '全画面表示',
+                          onPressed: () =>
+                              FullscreenService.instance.toggle(),
+                          icon: const Icon(Icons.fullscreen,
+                              color: AppColors.boneDim, size: 22),
+                        ),
+                      ),
+                    ),
                     _roleBadge(),
                     const SizedBox(height: 16),
                     Text(
