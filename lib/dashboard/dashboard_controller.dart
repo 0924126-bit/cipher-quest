@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../models/machine.dart';
+import '../models/role_config.dart';
 import '../models/sound_asset.dart';
+import '../services/alarm_service.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
 
@@ -13,10 +15,15 @@ class DashboardController extends ChangeNotifier {
   List<Machine> machines = [];
   List<MachineEvent> events = [];
   List<SoundAsset> sounds = [];
+  RoleConfig roles = const RoleConfig();
+  List<CurseEvent> curseEvents = [];
   bool allCompleted = false;
   bool connected = false;
   bool loading = true;
   String? error;
+
+  /// 呪い通知音はブラウザの自動再生制限のため、操作後に有効化される。
+  bool curseSoundArmed = false;
 
   SocketService? _socket;
   StreamSubscription? _msgSub;
@@ -44,13 +51,21 @@ class DashboardController extends ChangeNotifier {
       error = '$e';
       notifyListeners();
     }
-    // sounds are non-critical; load separately
+    // sounds / roles are non-critical; load separately
     refreshSounds();
+    refreshRoles();
   }
 
   Future<void> refreshSounds() async {
     try {
       sounds = await ApiService.instance.listSounds();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> refreshRoles() async {
+    try {
+      roles = await ApiService.instance.getRoles();
       notifyListeners();
     } catch (_) {}
   }
@@ -83,7 +98,35 @@ class DashboardController extends ChangeNotifier {
         // sound roles changed somewhere -> refresh the list
         refreshSounds();
         break;
+      case 'roles':
+        final r = msg['roles'];
+        if (r is Map<String, dynamic>) {
+          roles = RoleConfig.fromJson(r);
+          notifyListeners();
+        }
+        break;
+      case 'curse':
+        final ev = msg['event'];
+        if (ev is Map<String, dynamic>) {
+          final curse = CurseEvent.fromJson(ev);
+          curseEvents.insert(0, curse);
+          if (curseEvents.length > 30) {
+            curseEvents = curseEvents.sublist(0, 30);
+          }
+          if (curseSoundArmed) {
+            AlarmService.instance.playCurseSting();
+          }
+          notifyListeners();
+        }
+        break;
     }
+  }
+
+  /// ユーザー操作のタイミングで呼ぶと以降の呪い通知に音が鳴る。
+  void armCurseSound() {
+    if (curseSoundArmed) return;
+    curseSoundArmed = true;
+    notifyListeners();
   }
 
   // ---------- aggregates ----------
@@ -171,6 +214,43 @@ class DashboardController extends ChangeNotifier {
   }
 
   String machineUrl(String id) => ApiService.instance.machineUrl(id);
+  String chaserUrl() => ApiService.instance.chaserUrl();
+  String cursedUrl() => ApiService.instance.cursedUrl();
+  String hunterUrl() => ApiService.instance.hunterUrl();
+
+  // ---------- role config ----------
+  Future<void> updateRole(
+    String role, {
+    String? title,
+    String? subtitle,
+    int? alarmSec,
+    int? cooldownSec,
+    String? notifyMessage,
+  }) async {
+    await ApiService.instance.updateRole(
+      role,
+      title: title,
+      subtitle: subtitle,
+      alarmSec: alarmSec,
+      cooldownSec: cooldownSec,
+      notifyMessage: notifyMessage,
+    );
+    await refreshRoles();
+  }
+
+  Future<void> uploadCurseImage({
+    required String filename,
+    required List<int> bytes,
+  }) async {
+    await ApiService.instance
+        .uploadCurseImage(filename: filename, bytes: bytes);
+    await refreshRoles();
+  }
+
+  Future<void> deleteCurseImage() async {
+    await ApiService.instance.deleteCurseImage();
+    await refreshRoles();
+  }
 
   @override
   void dispose() {
