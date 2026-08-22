@@ -16,7 +16,9 @@ const Net = (() => {
 
   function url() {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    return `${proto}://${location.host}/ws/game`;
+    // site-wide auth: session token saved by the Flutter app login
+    const token = localStorage.getItem('ie_auth_token') || '';
+    return `${proto}://${location.host}/ws/game?token=${encodeURIComponent(token)}`;
   }
 
   function connect(playerName) {
