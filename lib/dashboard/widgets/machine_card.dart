@@ -391,7 +391,7 @@ class _MenuButton extends StatelessWidget {
     return PopupMenuButton<String>(
       icon: const Icon(Icons.more_vert, color: AppColors.dashGrey, size: 20),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: Colors.white,
+      color: AppColors.dashSurfaceHi,
       onSelected: (v) {
         switch (v) {
           case 'qr':
