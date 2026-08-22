@@ -8,7 +8,7 @@
   "title": "あなたは呪術師です",
   "subtitle": "呪いの刻印に触れよ…",
   "cooldown_sec": 30,
-  "button_image": "",
+  "button_image": "/role_images/curse_7548a106.png",
   "notify_message": "呪術師が呪いを発動した！"
  },
  "hunter": {
