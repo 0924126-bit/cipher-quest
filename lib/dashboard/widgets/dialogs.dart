@@ -15,8 +15,11 @@ Future<void> showQrDialog(
   return showDialog(
     context: context,
     builder: (context) => Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.dashLine),
+      ),
+      backgroundColor: AppColors.dashSurface,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 400),
         child: Padding(
@@ -48,13 +51,14 @@ Future<void> showQrDialog(
                   data: url,
                   version: QrVersions.auto,
                   size: 220,
+                  // QRはスキャン精度のため白背景×黒モジュールを維持する
                   eyeStyle: const QrEyeStyle(
                     eyeShape: QrEyeShape.circle,
-                    color: AppColors.dashInk,
+                    color: Color(0xFF202124),
                   ),
                   dataModuleStyle: const QrDataModuleStyle(
                     dataModuleShape: QrDataModuleShape.circle,
-                    color: AppColors.dashInk,
+                    color: Color(0xFF202124),
                   ),
                 ),
               ),
@@ -63,8 +67,9 @@ Future<void> showQrDialog(
               Container(
                 padding: const EdgeInsets.only(left: 16, right: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF1F3F4),
-                  borderRadius: BorderRadius.circular(12),
+                  color: AppColors.dashSurfaceHi,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.dashLine),
                 ),
                 child: Row(
                   children: [
@@ -167,9 +172,11 @@ Future<MachineFormResult?> showMachineFormDialog(
     builder: (context) => StatefulBuilder(
       builder: (context, setState) {
         return Dialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: AppColors.dashLine),
+          ),
+          backgroundColor: AppColors.dashSurface,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 420),
             child: SingleChildScrollView(
@@ -377,7 +384,7 @@ class _DifficultyPicker extends StatelessWidget {
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: selected == level
-                            ? Colors.white
+                            ? const Color(0xFF1C1408)
                             : AppColors.dashBlue,
                       ),
                     ),
@@ -386,7 +393,7 @@ class _DifficultyPicker extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 9.5,
                         color: selected == level
-                            ? Colors.white.withValues(alpha: 0.9)
+                            ? const Color(0xFF1C1408).withValues(alpha: 0.75)
                             : AppColors.dashGrey,
                       ),
                     ),
@@ -682,8 +689,11 @@ Future<bool> showDeleteConfirmDialog(
   final result = await showDialog<bool>(
     context: context,
     builder: (context) => Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.dashLine),
+      ),
+      backgroundColor: AppColors.dashSurface,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 400),
         child: Padding(
