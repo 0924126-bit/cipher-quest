@@ -46,4 +46,5 @@ app.*.map.json
 
 # runtime machine data (server-side persistence)
 server/data.json
+server/auth.json
 server/sounds/
