@@ -6,10 +6,14 @@ import 'roles/chaser_page.dart';
 import 'roles/cursed_page.dart';
 import 'roles/hunter_page.dart';
 import 'roles/role_select_page.dart';
+import 'services/alarm_service.dart';
 import 'services/pwa_service.dart';
 import 'theme/app_theme.dart';
 
 void main() {
+  // Install mobile audio-unlock gesture listeners as early as possible
+  // so the first tap anywhere enables Web Audio on iPhone/Android.
+  AlarmService.instance.init();
   runApp(const IdentityEApp());
 }
 
