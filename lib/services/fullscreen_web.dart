@@ -6,6 +6,7 @@
 /// On Android Chrome and desktop browsers this gives true fullscreen.
 library;
 
+import 'dart:async';
 import 'dart:js_interop';
 
 import 'package:web/web.dart' as web;
@@ -51,8 +52,8 @@ class FullscreenBackend {
     }
 
     // fullscreen transition is async; repin a few times to catch it.
-    web.window.setTimeout(repin.toJS, 80);
-    web.window.setTimeout(repin.toJS, 300);
-    web.window.setTimeout(repin.toJS, 700);
+    Timer(const Duration(milliseconds: 80), repin);
+    Timer(const Duration(milliseconds: 300), repin);
+    Timer(const Duration(milliseconds: 700), repin);
   }
 }
