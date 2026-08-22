@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/role_config.dart';
 import '../services/alarm_service.dart';
 import '../services/api_service.dart';
+import '../services/fullscreen_service.dart';
 
 /// 呪術師用ページ。
 ///
@@ -53,6 +54,11 @@ class _CursedPageState extends State<CursedPage>
     try {
       final roles = await ApiService.instance.getRoles();
       if (!mounted) return;
+      final newImage = roles.cursed.buttonImage;
+      // ボタン画像を先読みして表示遅延をなくす
+      if (newImage.isNotEmpty && newImage != _config.buttonImage) {
+        precacheImage(NetworkImage(newImage), context);
+      }
       setState(() {
         _config = roles.cursed;
         _loading = false;
@@ -63,6 +69,8 @@ class _CursedPageState extends State<CursedPage>
   }
 
   Future<void> _fireCurse() async {
+    // ユーザージェスチャのタイミングで全画面化
+    FullscreenService.instance.enter();
     if (!_ready) return;
     setState(() {
       _cooldownLeft = _config.cooldownSec;
@@ -119,7 +127,20 @@ class _CursedPageState extends State<CursedPage>
                       CircularProgressIndicator(color: Color(0xFF9B59D0)))
               : Column(
                   children: [
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: IconButton(
+                          tooltip: '全画面表示',
+                          onPressed: () =>
+                              FullscreenService.instance.toggle(),
+                          icon: const Icon(Icons.fullscreen,
+                              color: Color(0xFF6E5E85), size: 22),
+                        ),
+                      ),
+                    ),
                     _roleBadge(),
                     const SizedBox(height: 16),
                     Text(
@@ -214,6 +235,15 @@ class _CursedPageState extends State<CursedPage>
                           Image.network(
                             _config.buttonImage,
                             fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                            frameBuilder: (context, child, frame,
+                                wasSyncLoaded) {
+                              if (wasSyncLoaded || frame != null) {
+                                return child;
+                              }
+                              // 読み込み中は既定の刻印を見せて空白を防ぐ
+                              return _defaultFace();
+                            },
                             errorBuilder: (_, __, ___) => _defaultFace(),
                           ),
                           if (!_ready) _cooldownVeil(),
