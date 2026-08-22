@@ -4,16 +4,19 @@ Serves:
 - REST API      /api/*        (machine CRUD, QR data)
 - WebSocket     /ws/machine/{id}   (exclusive; one client per machine)
 - WebSocket     /ws/dashboard      (broadcast of all machine states)
-- Static files  /              (Flutter web build)
+- Static files  /              (Flutter web build, pre-gzipped + cached)
 
 Run: uvicorn main:app --host 0.0.0.0 --port 5060
 """
 import asyncio
+import gzip
+import mimetypes
 import os
 
 from fastapi import (FastAPI, File, Form, HTTPException, UploadFile,
                      WebSocket, WebSocketDisconnect)
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.requests import Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -31,6 +34,9 @@ app.include_router(game_router)
 @app.on_event("startup")
 async def _startup():
     asyncio.create_task(pump_loop())
+    # Pre-gzip the heavy Flutter bundles in a thread so the first
+    # mobile visitor doesn't pay 13MB+ of uncompressed downloads.
+    await asyncio.to_thread(_pregzip_web_build)
 
 app.add_middleware(
     CORSMiddleware,
@@ -425,22 +431,82 @@ app.mount("/sounds", StaticFiles(directory=SOUNDS_DIR), name="sounds")
 app.mount("/role_images", StaticFiles(directory=IMAGES_DIR), name="role_images")
 
 
-# ---------- Static Flutter web ----------
+# ---------- Static Flutter web (pre-gzipped + cache headers) ----------
+# Extensions worth compressing (text-ish / wasm). Images & fonts skip gzip.
+_GZ_EXTS = {".js", ".wasm", ".json", ".html", ".css", ".symbols", ".map", ".txt"}
+# Long-cache: content-hashed or version-pinned files that never change in place.
+_IMMUTABLE_HINTS = ("canvaskit", "assets/fonts", "assets/FontManifest",
+                    "assets/AssetManifest", "assets/NOTICES")
+
+
+def _pregzip_web_build():
+    """Create .gz siblings for heavy static files (idempotent, mtime-aware)."""
+    if not os.path.isdir(WEB_DIR):
+        return
+    total = 0
+    for root, _dirs, files in os.walk(WEB_DIR):
+        for name in files:
+            ext = os.path.splitext(name)[1].lower()
+            if ext not in _GZ_EXTS:
+                continue
+            src = os.path.join(root, name)
+            dst = src + ".gz"
+            try:
+                if (os.path.exists(dst)
+                        and os.path.getmtime(dst) >= os.path.getmtime(src)):
+                    continue
+                if os.path.getsize(src) < 4096:
+                    continue  # not worth it
+                with open(src, "rb") as f:
+                    data = f.read()
+                with open(dst, "wb") as f:
+                    f.write(gzip.compress(data, compresslevel=7))
+                total += 1
+            except OSError:
+                pass
+    if total:
+        print(f"[static] pre-gzipped {total} files")
+
+
+def _static_response(full: str, path: str, request: Request) -> FileResponse:
+    """Serve a static file, preferring the .gz sibling when accepted."""
+    headers = {}
+    # cache policy: index/bootstrap short, hashed assets long
+    base = os.path.basename(full)
+    if base in ("index.html", "flutter_bootstrap.js", "flutter_service_worker.js",
+                "version.json", "manifest.json"):
+        headers["Cache-Control"] = "no-cache"
+    elif any(h in path for h in _IMMUTABLE_HINTS) or base == "main.dart.js":
+        # main.dart.js changes on rebuild; rely on ETag revalidation but allow
+        # short-term reuse so repeat visits during the festival are instant.
+        headers["Cache-Control"] = "public, max-age=3600, stale-while-revalidate=86400"
+    else:
+        headers["Cache-Control"] = "public, max-age=600"
+
+    accept = request.headers.get("accept-encoding", "")
+    gz = full + ".gz"
+    if "gzip" in accept and os.path.isfile(gz):
+        media_type = mimetypes.guess_type(full)[0] or "application/octet-stream"
+        headers["Content-Encoding"] = "gzip"
+        headers["Vary"] = "Accept-Encoding"
+        return FileResponse(gz, media_type=media_type, headers=headers)
+    return FileResponse(full, headers=headers)
+
+
 if os.path.isdir(WEB_DIR):
-    app.mount("/assets", StaticFiles(directory=os.path.join(WEB_DIR, "assets")), name="assets")
-    app.mount("/canvaskit", StaticFiles(directory=os.path.join(WEB_DIR, "canvaskit")), name="canvaskit")
 
     @app.get("/{path:path}")
-    async def serve_web(path: str):
+    async def serve_web(path: str, request: Request):
         full = os.path.join(WEB_DIR, path)
         if path and os.path.isfile(full):
-            return FileResponse(full)
+            return _static_response(full, path, request)
         # directory index (e.g. /game -> game/index.html)
         if path and os.path.isdir(full):
             idx = os.path.join(full, "index.html")
             if os.path.isfile(idx):
-                return FileResponse(idx)
-        return FileResponse(os.path.join(WEB_DIR, "index.html"))
+                return _static_response(idx, path + "/index.html", request)
+        return _static_response(
+            os.path.join(WEB_DIR, "index.html"), "index.html", request)
 
 
 if __name__ == "__main__":
