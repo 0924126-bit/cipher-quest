@@ -45,8 +45,8 @@ class FullscreenBackend {
   void _repinSoon() {
     void repin() {
       try {
-        web.window.scrollTo(0, 0);
         web.document.documentElement?.scrollTop = 0;
+        web.document.body?.scrollTop = 0;
         web.window.dispatchEvent(web.Event('resize'));
       } catch (_) {}
     }
