@@ -2,6 +2,7 @@
 
 - Machine sockets: strictly ONE connection per machine id (exclusive lock).
 - Dashboard sockets: unlimited, receive broadcast of all machine states.
+- Hunter sockets: unlimited, receive curse notifications (smartphone pages).
 """
 import json
 from typing import Dict, Set
@@ -12,6 +13,7 @@ class ConnectionManager:
     def __init__(self):
         self.machine_sockets: Dict[str, WebSocket] = {}
         self.dashboard_sockets: Set[WebSocket] = set()
+        self.hunter_sockets: Set[WebSocket] = set()
 
     # ---------- machine side ----------
     def is_machine_connected(self, machine_id: str) -> bool:
@@ -65,6 +67,24 @@ class ConnectionManager:
                 dead.append(ws)
         for ws in dead:
             self.dashboard_sockets.discard(ws)
+
+    # ---------- hunter side ----------
+    async def connect_hunter(self, ws: WebSocket):
+        self.hunter_sockets.add(ws)
+
+    def disconnect_hunter(self, ws: WebSocket):
+        self.hunter_sockets.discard(ws)
+
+    async def broadcast_hunters(self, payload: dict):
+        text = json.dumps(payload, ensure_ascii=False)
+        dead = []
+        for ws in self.hunter_sockets:
+            try:
+                await ws.send_text(text)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.hunter_sockets.discard(ws)
 
 
 manager = ConnectionManager()
