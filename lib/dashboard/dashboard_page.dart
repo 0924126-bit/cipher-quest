@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../models/machine.dart';
 import '../theme/app_theme.dart';
@@ -10,16 +9,11 @@ import 'widgets/machine_card.dart';
 import 'widgets/role_panel.dart';
 import 'widgets/sound_panel.dart';
 
-/// 運営本部ダッシュボード。
+/// 運営ダッシュボード。
 ///
-/// 洞窟の指令室をイメージした暗色UI。上から
-///   1. 全体状況 (稼働数・進捗)
-///   2. 暗号機の管理
-///   3. ロールページ (チェイサー / 呪術師 / ハンター)
-///   4. サウンド
-///   5. 3Dゲーム
-///   6. 記録 (アクティビティ)
-/// の順に、当日の運営作業の頻度が高いものから並べている。
+/// 白基調の日本の業務システム風UI。
+/// 上部固定バーからセクションへワンタップで移動できる導線:
+///   概況 / 暗号機 / ロール / サウンド / ゲーム / 記録
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
@@ -29,6 +23,15 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   late final DashboardController _ctrl;
+  final _scroll = ScrollController();
+
+  // section anchors
+  final _keyStats = GlobalKey();
+  final _keyMachines = GlobalKey();
+  final _keyRoles = GlobalKey();
+  final _keySounds = GlobalKey();
+  final _keyGame = GlobalKey();
+  final _keyLog = GlobalKey();
 
   @override
   void initState() {
@@ -39,7 +42,19 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void dispose() {
     _ctrl.dispose();
+    _scroll.dispose();
     super.dispose();
+  }
+
+  void _jumpTo(GlobalKey key) {
+    final ctx = key.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+      alignment: 0.02,
+    );
   }
 
   Future<void> _addMachine() async {
@@ -99,257 +114,95 @@ class _DashboardPageState extends State<DashboardPage> {
         body: AnimatedBuilder(
           animation: _ctrl,
           builder: (context, _) {
-            return CustomScrollView(
-              slivers: [
-                // ---- 帯ヘッダー ----
-                SliverAppBar(
-                  pinned: true,
-                  toolbarHeight: 60,
-                  title: Row(
-                    children: [
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: AppColors.dashSurfaceHi,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: AppColors.dashAmber),
-                        ),
-                        child: const Icon(Icons.memory,
-                            color: AppColors.dashAmber, size: 18),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Cipher Quest',
-                        style: GoogleFonts.shipporiMincho(
-                          fontSize: 19,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.dashLine),
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                        child: const Text(
-                          '運営本部',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.dashGrey,
-                            letterSpacing: 3,
+            return Column(
+              children: [
+                _topBar(),
+                Expanded(
+                  child: SingleChildScrollView(
+                    controller: _scroll,
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1240),
+                        child: Padding(
+                          padding:
+                              const EdgeInsets.fromLTRB(20, 16, 20, 48),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // ---- notice banners ----
+                              if (!_ctrl.curseSoundArmed)
+                                _SoundArmBanner(
+                                    onArm: () => _ctrl.armCurseSound()),
+                              if (_ctrl.curseEvents.isNotEmpty) ...[
+                                const SizedBox(height: 10),
+                                _CurseBanner(ev: _ctrl.curseEvents.first),
+                              ],
+                              if (_ctrl.allCompleted &&
+                                  _ctrl.machines.isNotEmpty) ...[
+                                const SizedBox(height: 10),
+                                const _AllCompletedBanner(),
+                              ],
+
+                              // ---- 1. 概況 ----
+                              _section(
+                                key: _keyStats,
+                                title: '概況',
+                                sub: '暗号機の稼働と全体の進み具合',
+                                child: _StatsHeader(ctrl: _ctrl),
+                              ),
+
+                              // ---- 2. 暗号機 ----
+                              _section(
+                                key: _keyMachines,
+                                title: '暗号機',
+                                sub: 'QRコードを設置端末で読み取ると解読ページが開きます',
+                                action: ElevatedButton.icon(
+                                  onPressed: _addMachine,
+                                  icon: const Icon(Icons.add, size: 17),
+                                  label: const Text('暗号機を追加'),
+                                ),
+                                child: _machinesArea(),
+                              ),
+
+                              // ---- 3. ロール ----
+                              _section(
+                                key: _keyRoles,
+                                title: 'ロールページ',
+                                sub: 'チェイサーの警報・呪術師の呪い・ハンター通知端末の設定',
+                                child: RolePanel(ctrl: _ctrl),
+                              ),
+
+                              // ---- 4. サウンド ----
+                              _section(
+                                key: _keySounds,
+                                title: 'サウンド',
+                                sub: '解読音・完了音などのmp3を差し替えられます',
+                                child: SoundPanel(ctrl: _ctrl),
+                              ),
+
+                              // ---- 5. ゲーム ----
+                              _section(
+                                key: _keyGame,
+                                title: '3Dゲーム',
+                                sub: '追加コンテンツの管理',
+                                child: const GamePanel(),
+                              ),
+
+                              // ---- 6. 記録 ----
+                              if (_ctrl.events.isNotEmpty)
+                                _section(
+                                  key: _keyLog,
+                                  title: '記録',
+                                  sub: '接続・解読・スキルチェックなどの履歴',
+                                  child: _EventFeed(events: _ctrl.events),
+                                ),
+                            ],
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                  actions: [
-                    _ConnBadge(connected: _ctrl.connected),
-                    const SizedBox(width: 16),
-                  ],
-                ),
-
-                // ---- 通知音の有効化バナー ----
-                if (!_ctrl.curseSoundArmed)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                      child: _SoundArmBanner(
-                          onArm: () => _ctrl.armCurseSound()),
-                    ),
-                  ),
-
-                // ---- 呪い発動の速報 ----
-                if (_ctrl.curseEvents.isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                      child: _CurseBanner(ev: _ctrl.curseEvents.first),
-                    ),
-                  ),
-
-                // ---- 1. 全体状況 ----
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _SectionHeader(
-                          label: '全体状況',
-                          note: '暗号機の稼働と解読の進み具合',
-                        ),
-                        const SizedBox(height: 10),
-                        _StatsHeader(ctrl: _ctrl),
-                      ],
                     ),
                   ),
                 ),
-
-                // ---- 全解読完了バナー ----
-                if (_ctrl.allCompleted && _ctrl.machines.isNotEmpty)
-                  const SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(20, 12, 20, 0),
-                      child: _AllCompletedBanner(),
-                    ),
-                  ),
-
-                // ---- 2. 暗号機 ----
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-                    child: _SectionHeader(
-                      label: '暗号機の管理',
-                      note: 'QRを設置端末で読み取ると解読ページが開く',
-                      action: OutlinedButton.icon(
-                        onPressed: _addMachine,
-                        icon: const Icon(Icons.add, size: 16),
-                        label: const Text('追加',
-                            style: TextStyle(fontSize: 12.5)),
-                      ),
-                    ),
-                  ),
-                ),
-                if (_ctrl.loading)
-                  const SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 80),
-                      child: Center(
-                        child: CircularProgressIndicator(
-                            color: AppColors.dashAmber, strokeWidth: 2.5),
-                      ),
-                    ),
-                  )
-                else if (_ctrl.machines.isEmpty)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 40),
-                      child: _EmptyState(onAdd: _addMachine),
-                    ),
-                  )
-                else
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                    sliver: SliverLayoutBuilder(
-                      builder: (context, constraints) {
-                        final w = constraints.crossAxisExtent;
-                        final cols = w > 1200
-                            ? 4
-                            : w > 850
-                                ? 3
-                                : w > 560
-                                    ? 2
-                                    : 1;
-                        return SliverGrid(
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: cols,
-                            mainAxisSpacing: 14,
-                            crossAxisSpacing: 14,
-                            mainAxisExtent: 240,
-                          ),
-                          delegate: SliverChildBuilderDelegate(
-                            (context, i) {
-                              final m = _ctrl.machines[i];
-                              return MachineCard(
-                                key: ValueKey(m.id),
-                                machine: m,
-                                onQr: () => _showQr(m),
-                                onEdit: () => _editMachine(m),
-                                onReset: () => _ctrl.resetMachine(m.id),
-                                onDelete: () => _deleteMachine(m),
-                                onOpen: () => _openMachine(m),
-                                onSpeedNudge: (d) =>
-                                    _ctrl.nudgeSpeed(m.id, d),
-                                onSpeedReset: () => _ctrl.resetSpeed(m.id),
-                              );
-                            },
-                            childCount: _ctrl.machines.length,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-
-                // ---- 3. ロールページ ----
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _SectionHeader(
-                          label: 'ロールページ',
-                          note: 'チェイサーの警報・呪術師の呪い・ハンター端末',
-                        ),
-                        const SizedBox(height: 10),
-                        RolePanel(ctrl: _ctrl),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // ---- 4. サウンド ----
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _SectionHeader(
-                          label: 'サウンド',
-                          note: '解読音・完了音などのmp3を差し替えられる',
-                        ),
-                        const SizedBox(height: 10),
-                        SoundPanel(ctrl: _ctrl),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // ---- 5. 3Dゲーム ----
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(20, 28, 20, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _SectionHeader(
-                          label: '3Dゲーム',
-                          note: '追加コンテンツの管理',
-                        ),
-                        SizedBox(height: 10),
-                        GamePanel(),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // ---- 6. 記録 ----
-                if (_ctrl.events.isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 28, 20, 48),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const _SectionHeader(
-                            label: '記録',
-                            note: '接続・解読・スキルチェックなどの履歴',
-                          ),
-                          const SizedBox(height: 10),
-                          _EventFeed(events: _ctrl.events),
-                        ],
-                      ),
-                    ),
-                  )
-                else
-                  const SliverToBoxAdapter(
-                      child: SizedBox(height: 48)),
               ],
             );
           },
@@ -357,52 +210,187 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     );
   }
-}
 
-/// ---------- セクション見出し (縦ライン+ラベル) ----------
-class _SectionHeader extends StatelessWidget {
-  final String label;
-  final String note;
-  final Widget? action;
-  const _SectionHeader({
-    required this.label,
-    required this.note,
-    this.action,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 3,
-          height: 18,
-          decoration: BoxDecoration(
-            color: AppColors.dashAmber,
-            borderRadius: BorderRadius.circular(2),
+  // ---------- top bar with section nav ----------
+  Widget _topBar() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: AppColors.dashLine)),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: [
+              // brand
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: AppColors.dashBlue,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(Icons.memory,
+                    color: Colors.white, size: 17),
+              ),
+              const SizedBox(width: 10),
+              const Text(
+                'Cipher Quest',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                '運営管理',
+                style:
+                    TextStyle(fontSize: 12, color: AppColors.dashGrey),
+              ),
+              const SizedBox(width: 24),
+              // section nav (scrollable on narrow screens)
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _navItem('概況', () => _jumpTo(_keyStats)),
+                      _navItem('暗号機', () => _jumpTo(_keyMachines)),
+                      _navItem('ロール', () => _jumpTo(_keyRoles)),
+                      _navItem('サウンド', () => _jumpTo(_keySounds)),
+                      _navItem('ゲーム', () => _jumpTo(_keyGame)),
+                      _navItem('記録', () => _jumpTo(_keyLog)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              _ConnBadge(connected: _ctrl.connected),
+            ],
           ),
         ),
-        const SizedBox(width: 10),
-        Text(
+      ),
+    );
+  }
+
+  Widget _navItem(String label, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+        child: Text(
           label,
-          style: GoogleFonts.shipporiMincho(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 2,
+          style: const TextStyle(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w500,
+            color: AppColors.dashInk,
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            note,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-                fontSize: 11.5, color: AppColors.dashGrey),
+      ),
+    );
+  }
+
+  // ---------- section scaffold ----------
+  Widget _section({
+    required GlobalKey key,
+    required String title,
+    required String sub,
+    Widget? action,
+    required Widget child,
+  }) {
+    return Padding(
+      key: key,
+      padding: const EdgeInsets.only(top: 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Text(
+                    sub,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.dashGrey),
+                  ),
+                ),
+              ),
+              if (action != null) action,
+            ],
           ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+
+  // ---------- machines area ----------
+  Widget _machinesArea() {
+    if (_ctrl.loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 60),
+        child: Center(
+          child: CircularProgressIndicator(
+              color: AppColors.dashBlue, strokeWidth: 2.5),
         ),
-        if (action != null) action!,
-      ],
+      );
+    }
+    if (_ctrl.machines.isEmpty) {
+      return _EmptyState(onAdd: _addMachine);
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        final cols = w > 1150
+            ? 4
+            : w > 830
+                ? 3
+                : w > 550
+                    ? 2
+                    : 1;
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            mainAxisSpacing: 14,
+            crossAxisSpacing: 14,
+            mainAxisExtent: 240,
+          ),
+          itemCount: _ctrl.machines.length,
+          itemBuilder: (context, i) {
+            final m = _ctrl.machines[i];
+            return MachineCard(
+              key: ValueKey(m.id),
+              machine: m,
+              onQr: () => _showQr(m),
+              onEdit: () => _editMachine(m),
+              onReset: () => _ctrl.resetMachine(m.id),
+              onDelete: () => _deleteMachine(m),
+              onOpen: () => _openMachine(m),
+              onSpeedNudge: (d) => _ctrl.nudgeSpeed(m.id, d),
+              onSpeedReset: () => _ctrl.resetSpeed(m.id),
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -414,31 +402,34 @@ class _SoundArmBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onArm,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.dashAmber.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-              color: AppColors.dashAmber.withValues(alpha: 0.4)),
-        ),
-        child: const Row(
-          children: [
-            Icon(Icons.volume_up, size: 18, color: AppColors.dashAmber),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'ここをクリックすると、呪い発動時に通知音が鳴るようになります',
-                style: TextStyle(fontSize: 12.5),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onArm,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF8E7),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFEAD9A8)),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.volume_up,
+                  size: 18, color: AppColors.dashAmber),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'ここをクリックすると、呪い発動時に通知音が鳴るようになります',
+                  style: TextStyle(fontSize: 12.5),
+                ),
               ),
-            ),
-            Icon(Icons.chevron_right,
-                size: 18, color: AppColors.dashGrey),
-          ],
+              Icon(Icons.chevron_right,
+                  size: 18, color: AppColors.dashGrey),
+            ],
+          ),
         ),
       ),
     );
@@ -458,10 +449,9 @@ class _CurseBanner extends StatelessWidget {
       padding:
           const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.dashCurse.withValues(alpha: 0.1),
+        color: const Color(0xFFF7F0FC),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-            color: AppColors.dashCurse.withValues(alpha: 0.5)),
+        border: Border.all(color: const Color(0xFFDCC8EF)),
       ),
       child: Row(
         children: [
@@ -486,7 +476,7 @@ class _CurseBanner extends StatelessWidget {
   }
 }
 
-/// ---------- 全体状況 ----------
+/// ---------- 概況 ----------
 class _StatsHeader extends StatelessWidget {
   final DashboardController ctrl;
   const _StatsHeader({required this.ctrl});
@@ -516,7 +506,7 @@ class _StatsHeader extends StatelessWidget {
                 label: '解読完了',
                 value: '${ctrl.completedCount}',
                 unit: '台',
-                color: AppColors.dashAmber,
+                color: AppColors.dashBlue,
               ),
             ];
             final progress = _OverallProgress(value: ctrl.overallProgress);
@@ -574,7 +564,7 @@ class _StatItem extends StatelessWidget {
           children: [
             Text(
               value,
-              style: GoogleFonts.shipporiMincho(
+              style: TextStyle(
                 fontSize: 30,
                 fontWeight: FontWeight.w700,
                 height: 1,
@@ -619,10 +609,10 @@ class _OverallProgress extends StatelessWidget {
               curve: Curves.easeOutCubic,
               builder: (context, v, _) => Text(
                 '${v.toStringAsFixed(1)}%',
-                style: GoogleFonts.shipporiMincho(
+                style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.dashAmber,
+                  color: AppColors.dashBlue,
                 ),
               ),
             ),
@@ -639,7 +629,7 @@ class _OverallProgress extends StatelessWidget {
               value: v,
               minHeight: 8,
               backgroundColor: AppColors.dashLine,
-              valueColor: const AlwaysStoppedAnimation(AppColors.dashAmber),
+              valueColor: const AlwaysStoppedAnimation(AppColors.dashBlue),
             ),
           ),
         ),
@@ -663,25 +653,23 @@ class _AllCompletedBanner extends StatelessWidget {
         child: Opacity(opacity: v.clamp(0, 1), child: child),
       ),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         decoration: BoxDecoration(
-          color: AppColors.dashGreen.withValues(alpha: 0.12),
+          color: const Color(0xFFEAF6EE),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.dashGreen),
+          border: Border.all(color: const Color(0xFFB9E0C6)),
         ),
-        child: Row(
+        child: const Row(
           children: [
-            const Icon(Icons.celebration,
-                color: AppColors.dashGreen, size: 24),
-            const SizedBox(width: 14),
+            Icon(Icons.celebration, color: AppColors.dashGreen, size: 22),
+            SizedBox(width: 14),
             Expanded(
               child: Text(
                 '全ての暗号機の解読が完了！ ゲートが開通しました',
-                style: GoogleFonts.shipporiMincho(
+                style: TextStyle(
                   color: AppColors.dashGreen,
-                  fontSize: 15,
+                  fontSize: 14.5,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 1,
                 ),
               ),
             ),
@@ -699,39 +687,43 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 88,
-            height: 88,
-            decoration: BoxDecoration(
-              color: AppColors.dashSurfaceHi,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.dashLine),
-            ),
-            child: const Icon(Icons.memory,
-                size: 40, color: AppColors.dashGrey),
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 48),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: AppColors.dashSurfaceHi,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(Icons.memory,
+                    size: 36, color: AppColors.dashGrey),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'まだ暗号機がありません',
+                style:
+                    TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                '暗号機を追加して、QRコードを会場の端末で読み取りましょう',
+                style: TextStyle(fontSize: 13, color: AppColors.dashGrey),
+              ),
+              const SizedBox(height: 18),
+              ElevatedButton.icon(
+                onPressed: onAdd,
+                icon: const Icon(Icons.add),
+                label: const Text('最初の暗号機を追加'),
+              ),
+            ],
           ),
-          const SizedBox(height: 20),
-          Text(
-            'まだ暗号機がありません',
-            style: GoogleFonts.shipporiMincho(
-                fontSize: 17, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            '暗号機を追加して、QRコードを会場の端末で読み取りましょう',
-            style: TextStyle(fontSize: 13, color: AppColors.dashGrey),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton.icon(
-            onPressed: onAdd,
-            icon: const Icon(Icons.add),
-            label: const Text('最初の暗号機を追加'),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -782,11 +774,11 @@ class _EventFeed extends StatelessWidget {
       case 'connected':
       case 'speed':
       case 'sound':
-        return AppColors.dashAmber;
+        return AppColors.dashBlue;
       case 'disconnect':
       case 'disconnected':
       case 'skill_miss':
-        return AppColors.dashRed;
+        return AppColors.dashAmber;
       case 'deleted':
         return AppColors.dashRed;
       case 'curse':
@@ -849,11 +841,11 @@ class _ConnBadge extends StatelessWidget {
     final color = connected ? AppColors.dashGreen : AppColors.dashRed;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
       child: Row(
         children: [
@@ -862,11 +854,11 @@ class _ConnBadge extends StatelessWidget {
             height: 7,
             decoration: BoxDecoration(shape: BoxShape.circle, color: color),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 7),
           Text(
             connected ? '接続中' : '再接続中…',
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 11.5,
               fontWeight: FontWeight.w600,
               color: color,
             ),
