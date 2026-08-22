@@ -1,4 +1,4 @@
-"""Sound asset management for Cipher Quest.
+"""Sound asset management for Identity E.
 
 Operators upload mp3 files from the dashboard and assign each file a role:
 
