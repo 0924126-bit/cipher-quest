@@ -12,10 +12,16 @@ class PickedFile {
   const PickedFile({required this.name, required this.bytes});
 }
 
-Future<PickedFile?> pickMp3File() async {
+Future<PickedFile?> pickMp3File() => _pickFile('.mp3,audio/mpeg');
+
+/// Pick an image for the curse button face (png/jpg/webp/gif).
+Future<PickedFile?> pickImageFile() =>
+    _pickFile('.png,.jpg,.jpeg,.webp,.gif,image/*');
+
+Future<PickedFile?> _pickFile(String accept) async {
   final input = web.HTMLInputElement()
     ..type = 'file'
-    ..accept = '.mp3,audio/mpeg';
+    ..accept = accept;
 
   final completer = Completer<PickedFile?>();
 
