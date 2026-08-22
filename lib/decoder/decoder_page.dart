@@ -19,28 +19,48 @@ class DecoderPage extends StatefulWidget {
   State<DecoderPage> createState() => _DecoderPageState();
 }
 
-class _DecoderPageState extends State<DecoderPage> {
+class _DecoderPageState extends State<DecoderPage>
+    with WidgetsBindingObserver {
   late final DecoderController _ctrl;
   final GlobalKey<SkillCheckOverlayState> _skillKey = GlobalKey();
+
+  /// Pointers currently pressed on the machine. Counting every pointer
+  /// (multi-touch safe) guarantees holding is ALWAYS released when the
+  /// last finger leaves - even mid skill check. This fixes the bug where
+  /// decoding kept advancing with no finger on the screen.
+  final Set<int> _machinePointers = {};
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _ctrl = DecoderController(widget.machineId);
     _ctrl.connect();
   }
 
-  void _onPointerDown() {
-    // during a skill check, a tap is the QTE input - not a new hold
-    if (_ctrl.skillCheckActive) {
-      _skillKey.currentState?.tap();
-      return;
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // tab hidden / app backgrounded -> pointer-up events can get lost,
+    // so force-release the hold to prevent ghost decoding
+    if (state != AppLifecycleState.resumed) {
+      _machinePointers.clear();
+      _ctrl.endHold();
     }
-    _ctrl.startHold();
+  }
+
+  void _machineDown(PointerDownEvent e) {
+    _machinePointers.add(e.pointer);
+    if (_machinePointers.length == 1) _ctrl.startHold();
+  }
+
+  void _machineUpOrCancel(PointerEvent e) {
+    _machinePointers.remove(e.pointer);
+    if (_machinePointers.isEmpty) _ctrl.endHold();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _ctrl.dispose();
     super.dispose();
   }
@@ -142,13 +162,9 @@ class _DecoderPageState extends State<DecoderPage> {
         // ---- machine (hold target) ----
         Center(
           child: Listener(
-            onPointerDown: (_) => _onPointerDown(),
-            onPointerUp: (_) {
-              if (!_ctrl.skillCheckActive) _ctrl.endHold();
-            },
-            onPointerCancel: (_) {
-              if (!_ctrl.skillCheckActive) _ctrl.endHold();
-            },
+            onPointerDown: _machineDown,
+            onPointerUp: _machineUpOrCancel,
+            onPointerCancel: _machineUpOrCancel,
             child: MouseRegion(
               cursor: SystemMouseCursors.click,
               child: AnimatedScale(
@@ -188,7 +204,7 @@ class _DecoderPageState extends State<DecoderPage> {
                     const SizedBox(height: 16),
                     _PulsingHint(
                       text: _ctrl.skillCheckActive
-                          ? 'タップでスキルチェック！'
+                          ? '押したままもう1本の指でタップ！'
                           : _ctrl.holding
                               ? '解読中...'
                               : '暗号機を長押しして解読せよ',
@@ -202,11 +218,21 @@ class _DecoderPageState extends State<DecoderPage> {
         ),
 
         // ---- skill check QTE (pops up while decoding) ----
+        // Full-screen tap catcher: while a check is active, the SECOND
+        // finger can tap ANYWHERE on the screen (two-finger touch play).
+        // The first finger keeps holding the machine underneath because
+        // pointer events stay routed to the widget they started on.
         if (_ctrl.skillCheckActive)
-          SkillCheckOverlay(
-            key: _skillKey,
-            check: _ctrl.skillCheck!,
-            onResult: _ctrl.onSkillCheckResult,
+          Positioned.fill(
+            child: Listener(
+              behavior: HitTestBehavior.opaque,
+              onPointerDown: (_) => _skillKey.currentState?.tap(),
+              child: SkillCheckOverlay(
+                key: _skillKey,
+                check: _ctrl.skillCheck!,
+                onResult: _ctrl.onSkillCheckResult,
+              ),
+            ),
           ),
 
         // ---- completed overlay ----
