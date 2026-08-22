@@ -3,6 +3,13 @@
 /// - Siren: two-tone security-buzzer style sawtooth alarm (chaser page).
 /// - Curse sting: ominous descending tone + low boom (hunter / dashboard).
 /// - Curse press: deep sub-bass rumble feedback (cursed page).
+///
+/// MOBILE AUDIO UNLOCK: iOS Safari / Android Chrome keep an AudioContext
+/// `suspended` unless it is created/resumed inside a user gesture. We
+/// install one-time global gesture listeners that resume the context and
+/// kick it with a silent buffer, so later programmatic sounds (WS-driven
+/// curse stings, timer-driven siren tones) actually play on phones.
+/// NOTE: on iPhone the hardware silent switch still mutes Web Audio.
 library;
 
 import 'dart:async';
@@ -11,6 +18,10 @@ import 'dart:js_interop';
 import 'package:web/web.dart' as web;
 
 class AlarmBackend {
+  AlarmBackend() {
+    _installUnlockListeners();
+  }
+
   web.AudioContext? _ctx;
   web.OscillatorNode? _sirenOsc;
   web.GainNode? _sirenGain;
@@ -23,10 +34,47 @@ class AlarmBackend {
       c = web.AudioContext();
       _ctx = c;
     }
-    if (c.state == 'suspended') {
-      c.resume();
-    }
+    _kick(c);
     return c;
+  }
+
+  /// Resume a suspended context and play a 1-frame silent buffer.
+  /// Both steps are required for reliable unmuting on iOS/Android.
+  void _kick(web.AudioContext c) {
+    try {
+      if (c.state == 'suspended') {
+        c.resume();
+      }
+      final buf = c.createBuffer(1, 1, 22050);
+      final src = c.createBufferSource();
+      src.buffer = buf;
+      src.connect(c.destination);
+      src.start();
+    } catch (_) {}
+  }
+
+  /// One-time global gesture hooks: the first touch/click anywhere
+  /// unlocks audio for the whole session. Also re-resume when the tab
+  /// becomes visible again (iOS suspends contexts in background).
+  void _installUnlockListeners() {
+    void unlock(web.Event _) {
+      try {
+        _context();
+      } catch (_) {}
+    }
+
+    final cb = unlock.toJS;
+    web.document.addEventListener('touchend', cb, true.toJS);
+    web.document.addEventListener('mousedown', cb, true.toJS);
+    web.document.addEventListener('keydown', cb, true.toJS);
+    web.document.addEventListener('visibilitychange', ((web.Event _) {
+      final c = _ctx;
+      if (c != null && web.document.visibilityState == 'visible') {
+        try {
+          if (c.state == 'suspended') c.resume();
+        } catch (_) {}
+      }
+    }).toJS, false.toJS);
   }
 
   // ---------- siren (chaser) ----------
