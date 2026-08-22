@@ -7,3 +7,6 @@ class PickedFile {
 
 /// No-op picker for non-web platforms (dashboard is web-only in practice).
 Future<PickedFile?> pickMp3File() async => null;
+
+/// No-op image picker for non-web platforms.
+Future<PickedFile?> pickImageFile() async => null;
