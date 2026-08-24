@@ -1,8 +1,8 @@
 {
  "chaser": {
   "title": "あなたはチェイサーです",
-  "subtitle": "ボタンを押すと大音量の警報が鳴り響く",
-  "alarm_sec": 30
+  "subtitle": "ボタンを押",
+  "alarm_sec": 13
  },
  "cursed": {
   "title": "あなたは呪術師です",
