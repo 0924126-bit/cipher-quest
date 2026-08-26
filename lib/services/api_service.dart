@@ -193,6 +193,7 @@ class ApiService {
   String chaserUrl() => '$baseUrl/#/chaser';
   String cursedUrl() => '$baseUrl/#/cursed';
   String hunterUrl() => '$baseUrl/#/hunter';
+  String timerUrl() => '$baseUrl/#/timer';
 
   Future<RoleConfig> getRoles() async {
     final res = await http.get(_u('/api/roles'), headers: _auth);
@@ -208,6 +209,7 @@ class ApiService {
     int? alarmSec,
     int? cooldownSec,
     String? notifyMessage,
+    int? durationSec,
   }) async {
     final res = await http.patch(
       _u('/api/roles/$role'),
@@ -218,6 +220,7 @@ class ApiService {
         if (alarmSec != null) 'alarm_sec': alarmSec,
         if (cooldownSec != null) 'cooldown_sec': cooldownSec,
         if (notifyMessage != null) 'notify_message': notifyMessage,
+        if (durationSec != null) 'duration_sec': durationSec,
       }),
     );
     if (res.statusCode != 200) throw Exception('failed to update role');
@@ -256,6 +259,36 @@ class ApiService {
 
   Future<void> deleteCurseImage() async {
     final res = await http.delete(_u('/api/roles/cursed/image'), headers: _auth);
+    if (res.statusCode != 200) throw Exception('failed to delete image');
+  }
+
+  // ---------------- horror timer ----------------
+
+  Future<String> uploadTimerImage({
+    required String filename,
+    required List<int> bytes,
+  }) async {
+    final req = http.MultipartRequest('POST', _u('/api/roles/timer/image'))
+      ..headers.addAll(_auth)
+      ..files.add(
+          http.MultipartFile.fromBytes('file', bytes, filename: filename));
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+    if (res.statusCode != 200) {
+      String detail = '画像のアップロードに失敗しました';
+      try {
+        final body =
+            jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+        detail = (body['detail'] as String?) ?? detail;
+      } catch (_) {}
+      throw Exception(detail);
+    }
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    return (data['bg_image'] as String?) ?? '';
+  }
+
+  Future<void> deleteTimerImage() async {
+    final res = await http.delete(_u('/api/roles/timer/image'), headers: _auth);
     if (res.statusCode != 200) throw Exception('failed to delete image');
   }
 
