@@ -3,6 +3,7 @@
 class SoundBackend {
   void setSource(String role, String? url) {}
   void play(String role, {bool loop = false}) {}
+  void playOneShot(String role) {}
   void stop(String role) {}
   void stopAll() {}
   bool hasSource(String role) => false;
