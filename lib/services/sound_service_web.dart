@@ -55,6 +55,17 @@ class SoundBackend {
     } catch (_) {}
   }
 
+  /// 連打で重なって鳴らせるワンショット（タイマーのキー音用）。
+  /// cloneNode で新しい要素を作ると連打時に前の音を切らずに済む。
+  void playOneShot(String role) {
+    final src = _sources[role];
+    if (src == null) return;
+    try {
+      final p = web.HTMLAudioElement()..src = src;
+      p.play();
+    } catch (_) {}
+  }
+
   void stop(String role) {
     final p = _players[role];
     if (p == null) return;
