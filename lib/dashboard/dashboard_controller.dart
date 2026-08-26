@@ -217,6 +217,7 @@ class DashboardController extends ChangeNotifier {
   String chaserUrl() => ApiService.instance.chaserUrl();
   String cursedUrl() => ApiService.instance.cursedUrl();
   String hunterUrl() => ApiService.instance.hunterUrl();
+  String timerUrl() => ApiService.instance.timerUrl();
 
   // ---------- role config ----------
   Future<void> updateRole(
@@ -226,6 +227,7 @@ class DashboardController extends ChangeNotifier {
     int? alarmSec,
     int? cooldownSec,
     String? notifyMessage,
+    int? durationSec,
   }) async {
     await ApiService.instance.updateRole(
       role,
@@ -234,6 +236,7 @@ class DashboardController extends ChangeNotifier {
       alarmSec: alarmSec,
       cooldownSec: cooldownSec,
       notifyMessage: notifyMessage,
+      durationSec: durationSec,
     );
     await refreshRoles();
   }
@@ -249,6 +252,20 @@ class DashboardController extends ChangeNotifier {
 
   Future<void> deleteCurseImage() async {
     await ApiService.instance.deleteCurseImage();
+    await refreshRoles();
+  }
+
+  Future<void> uploadTimerImage({
+    required String filename,
+    required List<int> bytes,
+  }) async {
+    await ApiService.instance
+        .uploadTimerImage(filename: filename, bytes: bytes);
+    await refreshRoles();
+  }
+
+  Future<void> deleteTimerImage() async {
+    await ApiService.instance.deleteTimerImage();
     await refreshRoles();
   }
 
