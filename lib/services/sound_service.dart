@@ -26,8 +26,11 @@ class SoundService {
       'skill_warn',
       'skill_success',
       'skill_fail',
+      'timer_bgm',
+      'timer_key',
     ]) {
       final v = roles[role];
+      if (!roles.containsKey(role)) continue; // 部分更新を許容
       _backend.setSource(role, v is String && v.isNotEmpty ? v : null);
     }
   }
@@ -46,6 +49,13 @@ class SoundService {
 
   void playSkillResult(bool success) =>
       _backend.play(success ? 'skill_success' : 'skill_fail');
+
+  // ---- horror timer ----
+  void startTimerBgm() => _backend.play('timer_bgm', loop: true);
+  void stopTimerBgm() => _backend.stop('timer_bgm');
+
+  /// キー音は連打されるので多重再生で鳴らす。
+  void playTimerKey() => _backend.playOneShot('timer_key');
 
   void stopAll() => _backend.stopAll();
 }
