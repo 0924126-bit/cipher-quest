@@ -55,15 +55,41 @@ class HunterConfig {
       );
 }
 
+/// 廃校ホラータイマーの設定。
+class TimerConfig {
+  final String title;
+  final String subtitle;
+  final int durationSec;
+
+  /// 背景画像URL ('' = 内蔵の廃校背景 /images/timer_bg.jpg)。
+  final String bgImage;
+
+  const TimerConfig({
+    this.title = '償いの刻限',
+    this.subtitle = '時間が尽きる前に…逃げられると思うな',
+    this.durationSec = 300,
+    this.bgImage = '',
+  });
+
+  factory TimerConfig.fromJson(Map<String, dynamic> json) => TimerConfig(
+        title: (json['title'] as String?) ?? '償いの刻限',
+        subtitle: (json['subtitle'] as String?) ?? '',
+        durationSec: (json['duration_sec'] as num?)?.toInt() ?? 300,
+        bgImage: (json['bg_image'] as String?) ?? '',
+      );
+}
+
 class RoleConfig {
   final ChaserConfig chaser;
   final CursedConfig cursed;
   final HunterConfig hunter;
+  final TimerConfig timer;
 
   const RoleConfig({
     this.chaser = const ChaserConfig(),
     this.cursed = const CursedConfig(),
     this.hunter = const HunterConfig(),
+    this.timer = const TimerConfig(),
   });
 
   factory RoleConfig.fromJson(Map<String, dynamic> json) => RoleConfig(
@@ -76,6 +102,9 @@ class RoleConfig {
         hunter: json['hunter'] is Map<String, dynamic>
             ? HunterConfig.fromJson(json['hunter'] as Map<String, dynamic>)
             : const HunterConfig(),
+        timer: json['timer'] is Map<String, dynamic>
+            ? TimerConfig.fromJson(json['timer'] as Map<String, dynamic>)
+            : const TimerConfig(),
       );
 }
 
