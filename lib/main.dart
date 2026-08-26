@@ -8,6 +8,7 @@ import 'roles/chaser_page.dart';
 import 'roles/cursed_page.dart';
 import 'roles/hunter_page.dart';
 import 'roles/role_select_page.dart';
+import 'roles/timer_page.dart';
 import 'services/alarm_service.dart';
 import 'services/auth_service.dart';
 import 'services/pwa_service.dart';
@@ -105,6 +106,8 @@ class _IdentityEAppState extends State<IdentityEApp> {
                 return fade(const CursedPage());
               case 'hunter':
                 return fade(const HunterPage());
+              case 'timer':
+                return fade(const TimerPage());
             }
           }
           return fade(const RoleSelectPage());
@@ -125,6 +128,8 @@ class _IdentityEAppState extends State<IdentityEApp> {
               return fade(const CursedPage());
             case 'hunter':
               return fade(const HunterPage());
+            case 'timer':
+              return fade(const TimerPage());
             case 'passkey':
               // secret page: reachable only by typing the URL
               return fade(const PasskeyPage());
