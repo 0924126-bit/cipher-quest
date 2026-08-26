@@ -46,6 +46,8 @@ class SoundAsset {
     'skill_warn': 'スキルチェック出現',
     'skill_success': 'スキルチェック成功',
     'skill_fail': 'スキルチェック失敗',
+    'timer_bgm': 'タイマーBGM（ループ）',
+    'timer_key': 'タイマーキー音',
   };
 
   String get roleLabel => roleLabels[role] ?? role;
