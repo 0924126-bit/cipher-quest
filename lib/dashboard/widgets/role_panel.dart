@@ -23,6 +23,7 @@ class RolePanel extends StatefulWidget {
 
 class _RolePanelState extends State<RolePanel> {
   bool _uploading = false;
+  bool _uploadingTimer = false;
 
   DashboardController get ctrl => widget.ctrl;
 
@@ -46,6 +47,29 @@ class _RolePanelState extends State<RolePanel> {
       }
     } finally {
       if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  Future<void> _uploadTimerImage() async {
+    final picked = await pickImageFile();
+    if (picked == null || !mounted) return;
+    setState(() => _uploadingTimer = true);
+    try {
+      await ctrl.uploadTimerImage(
+          filename: picked.name, bytes: picked.bytes);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('タイマーの背景画像を差し替えました')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'.replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingTimer = false);
     }
   }
 
@@ -188,6 +212,7 @@ class _RolePanelState extends State<RolePanel> {
                   _chaserCard(roles.chaser),
                   _cursedCard(roles.cursed),
                   _hunterCard(roles.hunter),
+                  _timerCard(roles.timer),
                 ];
                 if (narrow) {
                   return Column(
@@ -370,6 +395,145 @@ class _RolePanelState extends State<RolePanel> {
         ),
       ],
     );
+  }
+
+  // ---------- 廃校タイマー ----------
+  Widget _timerCard(TimerConfig c) {
+    return _roleCard(
+      icon: Icons.hourglass_bottom,
+      iconColor: const Color(0xFF7A2430),
+      roleName: '廃校タイマー',
+      url: ctrl.timerUrl(),
+      urlLabel: 'タイマーページ',
+      rows: [
+        _settingRow(
+          label: '表示タイトル',
+          value: c.title,
+          onTap: () => _editText(
+            dialogTitle: 'タイマーの表示タイトル',
+            initial: c.title,
+            onSave: (v) => ctrl.updateRole('timer', title: v),
+          ),
+        ),
+        _settingRow(
+          label: 'サブタイトル',
+          value: c.subtitle,
+          onTap: () => _editText(
+            dialogTitle: 'タイマーのサブタイトル',
+            initial: c.subtitle,
+            onSave: (v) => ctrl.updateRole('timer', subtitle: v),
+          ),
+        ),
+        _settingRow(
+          label: '制限時間',
+          value: '${c.durationSec ~/ 60}分 ${c.durationSec % 60}秒',
+          onTap: () => _editTimerDuration(c.durationSec),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              margin: const EdgeInsets.only(right: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: AppColors.dashLine),
+                image: DecorationImage(
+                  image: NetworkImage(c.bgImage.isNotEmpty
+                      ? c.bgImage
+                      : '/images/timer_bg.jpg'),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _uploadingTimer ? null : _uploadTimerImage,
+                icon: _uploadingTimer
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.image, size: 16),
+                label: Text(
+                  c.bgImage.isEmpty ? '背景画像を変更' : '画像を変更',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ),
+            if (c.bgImage.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: '画像を削除して既定の廃校背景に戻す',
+                onPressed: () => ctrl.deleteTimerImage(),
+                icon: const Icon(Icons.delete_outline,
+                    size: 18, color: AppColors.dashRed),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'BGM・キー音は下の「効果音」パネルでmp3をアップロードし、'
+          '「タイマーBGM」「タイマーキー音」に割り当てると差し替わります。',
+          style: TextStyle(
+              fontSize: 11, color: AppColors.dashGrey, height: 1.6),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _editTimerDuration(int initial) async {
+    var value = (initial ~/ 60).clamp(1, 120).toDouble();
+    final result = await showDialog<int>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setInner) => AlertDialog(
+          title: const Text('タイマーの制限時間',
+              style: TextStyle(fontSize: 16)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${value.round()} 分',
+                style: const TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.dashAmber,
+                ),
+              ),
+              Slider(
+                value: value,
+                min: 1,
+                max: 120,
+                divisions: 119,
+                onChanged: (v) => setInner(() => value = v),
+              ),
+              const Text(
+                '1分〜120分の範囲で設定できます',
+                style:
+                    TextStyle(fontSize: 12, color: AppColors.dashGrey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('キャンセル'),
+            ),
+            ElevatedButton(
+              onPressed: () =>
+                  Navigator.pop(context, value.round() * 60),
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result != null) {
+      await ctrl.updateRole('timer', durationSec: result);
+    }
   }
 
   // ---------- 共通部品 ----------
