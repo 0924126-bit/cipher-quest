@@ -54,6 +54,7 @@ class DashboardController extends ChangeNotifier {
     // sounds / roles are non-critical; load separately
     refreshSounds();
     refreshRoles();
+    refreshKeyBindings();
   }
 
   Future<void> refreshSounds() async {
@@ -95,8 +96,9 @@ class DashboardController extends ChangeNotifier {
         notifyListeners();
         break;
       case 'sounds':
-        // sound roles changed somewhere -> refresh the list
+        // sound roles / key bindings changed somewhere -> refresh
         refreshSounds();
+        refreshKeyBindings();
         break;
       case 'roles':
         final r = msg['roles'];
@@ -267,6 +269,43 @@ class DashboardController extends ChangeNotifier {
   Future<void> deleteTimerImage() async {
     await ApiService.instance.deleteTimerImage();
     await refreshRoles();
+  }
+
+  // ---------- quick actions ----------
+
+  /// チェイサー警報を再許可（1回限り警報の再チャージ）。
+  Future<void> armChaserAlarm() async {
+    await ApiService.instance.armChaserAlarm();
+    await refreshRoles();
+  }
+
+  /// 全体リセット: 全暗号機の進捗+速度、チェイサー警報の再許可。
+  Future<void> globalReset() async {
+    await ApiService.instance.globalReset();
+    await refreshRoles();
+  }
+
+  // ---------- per-key timer sounds ----------
+
+  /// key -> sound id (ダッシュボードのキー割当エディタ用)。
+  Map<String, String> keyBindings = const {};
+
+  Future<void> refreshKeyBindings() async {
+    try {
+      final data = await ApiService.instance.getSoundsData();
+      keyBindings = data.keyBindings;
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> setKeySound(String key, String soundId) async {
+    await ApiService.instance.setKeySound(key, soundId);
+    await refreshKeyBindings();
+  }
+
+  Future<void> removeKeySound(String key) async {
+    await ApiService.instance.removeKeySound(key);
+    await refreshKeyBindings();
   }
 
   @override
