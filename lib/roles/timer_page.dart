@@ -32,6 +32,7 @@ class _TimerPageState extends State<TimerPage>
   bool _running = false;
   bool _finished = false;
   Timer? _tick;
+  Timer? _poll;
 
   // 蛍光灯の明滅
   final math.Random _rand = math.Random();
@@ -55,16 +56,26 @@ class _TimerPageState extends State<TimerPage>
     _load();
     // ページ表示中は音源マップを取得（デフォルトはビルド内蔵）
     _loadSounds();
+    // 設定変更・全体リセット・キー音割当の反映（軽量ポーリング）
+    _poll = Timer.periodic(const Duration(seconds: 5), (_) {
+      _load();
+      _loadSounds();
+    });
   }
 
   Future<void> _load() async {
     try {
       final roles = await ApiService.instance.getRoles();
       if (!mounted) return;
+      final prevResetAt = _cfg.resetAt;
       setState(() {
         _cfg = roles.timer;
         if (!_running && !_finished) _remaining = _cfg.durationSec;
       });
+      // ダッシュボードの全体リセットを検知したらタイマーもリセット
+      if (prevResetAt != 0 && _cfg.resetAt > prevResetAt) {
+        _reset();
+      }
     } catch (_) {
       // 未認証などでも初期設定で動く
     }
@@ -177,6 +188,7 @@ class _TimerPageState extends State<TimerPage>
   @override
   void dispose() {
     _tick?.cancel();
+    _poll?.cancel();
     _flickerTimer?.cancel();
     _flame.dispose();
     _focus.dispose();
