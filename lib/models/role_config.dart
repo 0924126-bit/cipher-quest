@@ -6,16 +6,22 @@ class ChaserConfig {
   final String subtitle;
   final int alarmSec;
 
+  /// 警報は1回限り。発動すると false になり、
+  /// ダッシュボードで再許可（または全体リセット）するまで使えない。
+  final bool alarmArmed;
+
   const ChaserConfig({
     this.title = 'あなたはチェイサーです',
     this.subtitle = 'ボタンを押すと大音量の警報が鳴り響く',
     this.alarmSec = 30,
+    this.alarmArmed = true,
   });
 
   factory ChaserConfig.fromJson(Map<String, dynamic> json) => ChaserConfig(
         title: (json['title'] as String?) ?? 'あなたはチェイサーです',
         subtitle: (json['subtitle'] as String?) ?? '',
         alarmSec: (json['alarm_sec'] as num?)?.toInt() ?? 30,
+        alarmArmed: (json['alarm_armed'] as bool?) ?? true,
       );
 }
 
