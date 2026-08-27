@@ -6,14 +6,17 @@ import 'package:flutter/services.dart';
 
 import '../models/role_config.dart';
 import '../services/api_service.dart';
+import '../services/key_sound_map.dart';
 import '../services/sound_service.dart';
+import 'widgets/timer_candles.dart';
 
 /// 廃校ホラータイマー。
 ///
+/// - 残り時間: 数字ではなく「儀式の蝋燭」13本が燃え尽きていく表示
 /// - 背景: ダッシュボードから差し替え可能な廃校画像（初期は内蔵の廃校廊下）
 /// - BGM: ループ再生（初期は合成ホラードローン、ダッシュボードでmp3差替可）
-/// - キー音: 何かキーを押すたびに鳴る（差替可）
-/// - 演出: 明滅する蛍光灯、ノイズ、残り時間わずかで血の色に
+/// - キー音: キーごとにダッシュボードで割り当てた音を再生（未割当は既定音）
+/// - 演出: 明滅する蛍光灯、残り時間わずかで血の色に
 class TimerPage extends StatefulWidget {
   const TimerPage({super.key});
 
@@ -31,24 +34,12 @@ class _TimerPageState extends State<TimerPage>
   Timer? _tick;
 
   // 蛍光灯の明滅
-  late final AnimationController _flicker;
   final math.Random _rand = math.Random();
   double _flickerLevel = 1.0;
   Timer? _flickerTimer;
 
-  // キー入力で走る「気配」表示
-  String _whisper = '';
-  Timer? _whisperTimer;
-  static const _whispers = [
-    'うしろ…',
-    'みてる',
-    'にげて',
-    'もうすぐ',
-    'こっちへ',
-    'かえれない',
-    'だれ…？',
-    'まだいる',
-  ];
+  // 蝋燭の炎の揺らぎ
+  late final AnimationController _flame;
 
   final FocusNode _focus = FocusNode();
   bool _bgmStarted = false;
@@ -56,10 +47,10 @@ class _TimerPageState extends State<TimerPage>
   @override
   void initState() {
     super.initState();
-    _flicker = AnimationController(
+    _flame = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 90),
-    );
+      duration: const Duration(milliseconds: 2400),
+    )..repeat();
     _scheduleFlicker();
     _load();
     // ページ表示中は音源マップを取得（デフォルトはビルド内蔵）
@@ -81,17 +72,14 @@ class _TimerPageState extends State<TimerPage>
 
   Future<void> _loadSounds() async {
     try {
-      final list = await ApiService.instance.listSounds();
-      final map = <String, dynamic>{
-        'timer_bgm': '/audio/timer_bgm.mp3',
-        'timer_key': '/audio/timer_key.mp3',
-      };
-      for (final s in list) {
-        if (s.role == 'timer_bgm' || s.role == 'timer_key') {
-          map[s.role] = s.url;
-        }
-      }
-      SoundService.instance.updateSources(map);
+      final data = await ApiService.instance.getSoundsData();
+      SoundService.instance.updateSources({
+        'timer_bgm':
+            data.roleMap['timer_bgm'] ?? '/audio/timer_bgm.mp3',
+        'timer_key':
+            data.roleMap['timer_key'] ?? '/audio/timer_key.mp3',
+      });
+      SoundService.instance.updateKeySounds(data.keyMap);
     } catch (_) {
       // 未認証時はビルド内蔵のデフォルト音を使う
       SoundService.instance.updateSources(const {
@@ -140,26 +128,18 @@ class _TimerPageState extends State<TimerPage>
   void _onKey(KeyEvent event) {
     if (event is! KeyDownEvent) return;
     _ensureBgm(); // 最初のキーで自動再生制限を解除しつつBGM開始
-    SoundService.instance.playTimerKey();
 
-    // スペース/Enter で開始・停止をトグル
+    // キー別の割当音（未割当は既定の timer_key 音）
+    SoundService.instance
+        .playTimerKey(KeySoundMap.normalize(event.logicalKey));
+
+    // スペース/Enter で開始・停止をトグル、R でリセット
     if (event.logicalKey == LogicalKeyboardKey.space ||
         event.logicalKey == LogicalKeyboardKey.enter) {
       _toggle();
     } else if (event.logicalKey == LogicalKeyboardKey.keyR) {
       _reset();
-    } else {
-      // その他のキー: 稀に囁きが浮かぶ
-      if (_rand.nextInt(4) == 0) _showWhisper();
     }
-  }
-
-  void _showWhisper() {
-    _whisperTimer?.cancel();
-    setState(() => _whisper = _whispers[_rand.nextInt(_whispers.length)]);
-    _whisperTimer = Timer(const Duration(milliseconds: 1400), () {
-      if (mounted) setState(() => _whisper = '');
-    });
   }
 
   void _toggle() {
@@ -198,8 +178,7 @@ class _TimerPageState extends State<TimerPage>
   void dispose() {
     _tick?.cancel();
     _flickerTimer?.cancel();
-    _whisperTimer?.cancel();
-    _flicker.dispose();
+    _flame.dispose();
     _focus.dispose();
     SoundService.instance.stopTimerBgm();
     super.dispose();
@@ -208,17 +187,8 @@ class _TimerPageState extends State<TimerPage>
   String get _bgUrl =>
       _cfg.bgImage.isNotEmpty ? _cfg.bgImage : '/images/timer_bg.jpg';
 
-  Color get _timeColor {
-    if (_finished) return const Color(0xFF8B0000);
-    if (_remaining <= 30) return const Color(0xFFB30000);
-    if (_remaining <= 60) return const Color(0xFFC94F2E);
-    return const Color(0xFFB8C7BF);
-  }
-
   @override
   Widget build(BuildContext context) {
-    final min = (_remaining ~/ 60).toString().padLeft(2, '0');
-    final sec = (_remaining % 60).toString().padLeft(2, '0');
     final danger = _remaining <= 30 && !_finished;
 
     return KeyboardListener(
@@ -229,7 +199,7 @@ class _TimerPageState extends State<TimerPage>
         // タップでもキー音+BGM解錠（スマホ用）
         onTap: () {
           _ensureBgm();
-          SoundService.instance.playTimerKey();
+          SoundService.instance.playTimerKey(); // タップは既定音
           _focus.requestFocus();
         },
         onDoubleTap: _toggle,
@@ -318,28 +288,8 @@ class _TimerPageState extends State<TimerPage>
                       ),
                     ),
                     const Spacer(),
-                    // ---- 時計本体 ----
-                    _finished ? _deadDisplay() : _clock(min, sec, danger),
-                    // 囁き
-                    SizedBox(
-                      height: 34,
-                      child: AnimatedOpacity(
-                        opacity: _whisper.isEmpty ? 0 : 0.85,
-                        duration: const Duration(milliseconds: 300),
-                        child: Text(
-                          _whisper,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            letterSpacing: 8,
-                            color: Color(0xFF7A2430),
-                            shadows: [
-                              Shadow(
-                                  color: Color(0xFF3D0813), blurRadius: 12),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+                    // ---- 残り時間: 儀式の蝋燭 ----
+                    if (_finished) _deadDisplay() else _candles(danger),
                     const Spacer(),
                     // 操作ヒント
                     Padding(
@@ -383,39 +333,35 @@ class _TimerPageState extends State<TimerPage>
     );
   }
 
-  Widget _clock(String min, String sec, bool danger) {
-    final blink = danger && _remaining % 2 == 0;
+  /// 数字を使わない残り時間表示。
+  /// 13本の儀式の蝋燭が左から順に燃え尽き、消えた蝋燭からは
+  /// 煙が立ちのぼる。残り僅かで炎が血の色に変わる。
+  Widget _candles(bool danger) {
+    final progress =
+        _cfg.durationSec <= 0 ? 0.0 : _remaining / _cfg.durationSec;
     return Column(
       children: [
-        // 数字
-        Text(
-          '$min:$sec',
-          style: TextStyle(
-            fontSize: 120,
-            height: 1.0,
-            fontWeight: FontWeight.w200,
-            fontFeatures: const [FontFeature.tabularFigures()],
-            letterSpacing: 6,
-            color: _timeColor.withValues(
-                alpha: (blink ? 0.55 : 1.0) * _flickerLevel),
-            shadows: [
-              Shadow(
-                color: danger
-                    ? const Color(0xFF8B0000).withValues(alpha: 0.8)
-                    : const Color(0xFF223B2E).withValues(alpha: 0.9),
-                blurRadius: danger ? 46 : 30,
-              ),
-              const Shadow(color: Color(0xCC000000), blurRadius: 8),
-            ],
+        AnimatedBuilder(
+          animation: _flame,
+          builder: (context, _) => TimerCandles(
+            progress: progress,
+            flicker: _flickerLevel,
+            flame: _flame.value,
+            danger: danger,
+            finished: _finished,
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 14),
         Text(
-          _running ? '― 刻限が迫っている ―' : '― 静止している ―',
+          _running
+              ? (danger ? '― 灯が、残りわずか ―' : '― 灯が消えてゆく ―')
+              : '― 灯は静止している ―',
           style: TextStyle(
             fontSize: 13,
             letterSpacing: 6,
-            color: const Color(0xFF5E6E64)
+            color: (danger
+                    ? const Color(0xFF8A3A3A)
+                    : const Color(0xFF5E6E64))
                 .withValues(alpha: 0.9 * _flickerLevel),
           ),
         ),
