@@ -12,9 +12,9 @@ import '../theme/app_theme.dart';
 
 /// チェイサー用ページ。
 ///
-/// 大きな警報ボタンを押すと防犯ブザーのようなサイレンが
-/// N秒間(運営ダッシュボードで調整可能)鳴り響く。
-/// 画面には「あなたはチェイサーです」(タイトルも変更可能)。
+/// 大きな警報ボタンを押すとサイレンがN秒間鳴り響く。
+/// 警報は【1回限り】。発動すると途中停止はできず、鳴り終わると
+/// 使用済みになる。再度使えるのはダッシュボードで許可したときのみ。
 class ChaserPage extends StatefulWidget {
   const ChaserPage({super.key});
 
@@ -61,28 +61,50 @@ class _ChaserPageState extends State<ChaserPage>
     }
   }
 
-  void _startAlarm() {
+  Future<void> _startAlarm() async {
     // ユーザージェスチャのタイミングで全画面化(初回タップ時)
     FullscreenService.instance.enter();
-    if (_alarming) {
-      _stopAlarm();
-      return;
+    // 鳴っている間は何をしても止まらない(1回限りの警報)
+    if (_alarming) return;
+    if (!_config.alarmArmed) return; // 使用済み
+
+    // サーバーで消費(他端末との二重発動も防ぐ)
+    int alarmSec;
+    try {
+      final sec = await ApiService.instance.fireChaserAlarm();
+      if (sec == null) {
+        // すでに使用済みだった
+        await _loadConfig();
+        return;
+      }
+      alarmSec = sec;
+    } catch (_) {
+      return; // 通信失敗時は発動しない(誤消費防止)
     }
+
+    if (!mounted) return;
     AlarmService.instance.startSiren();
     AlarmService.instance.vibrate();
     setState(() {
       _alarming = true;
-      _remaining = _config.alarmSec;
+      _remaining = alarmSec;
+      _config = ChaserConfig(
+        title: _config.title,
+        subtitle: _config.subtitle,
+        alarmSec: _config.alarmSec,
+        alarmArmed: false,
+      );
     });
     _countdown?.cancel();
     _countdown = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() => _remaining -= 1);
-      if (_remaining <= 0) _stopAlarm();
+      if (_remaining <= 0) _finishAlarm();
     });
   }
 
-  void _stopAlarm() {
+  /// 時間切れでのみ停止する(手動停止は不可)。
+  void _finishAlarm() {
     _countdown?.cancel();
     AlarmService.instance.stopSiren();
     if (mounted) {
@@ -90,6 +112,7 @@ class _ChaserPageState extends State<ChaserPage>
         _alarming = false;
         _remaining = 0;
       });
+      _loadConfig(); // 最新の armed 状態を取り直す
     }
   }
 
@@ -202,14 +225,18 @@ class _ChaserPageState extends State<ChaserPage>
   }
 
   Widget _alarmButton() {
+    final used = !_config.alarmArmed && !_alarming;
     return AnimatedBuilder(
       animation: _pulse,
       builder: (context, _) {
         final glow = _alarming ? 0.35 + _pulse.value * 0.45 : 0.15;
-        final color =
-            _alarming ? const Color(0xFFE23A2E) : const Color(0xFF8E2B24);
+        final color = used
+            ? const Color(0xFF3A3733)
+            : _alarming
+                ? const Color(0xFFE23A2E)
+                : const Color(0xFF8E2B24);
         return GestureDetector(
-          onTap: _startAlarm,
+          onTap: used ? null : _startAlarm,
           child: Container(
             width: 240,
             height: 240,
@@ -239,19 +266,25 @@ class _ChaserPageState extends State<ChaserPage>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  _alarming
-                      ? Icons.notifications_active
-                      : Icons.notifications_none,
+                  used
+                      ? Icons.notifications_off
+                      : _alarming
+                          ? Icons.notifications_active
+                          : Icons.notifications_none,
                   size: 64,
-                  color: Colors.white.withValues(alpha: 0.92),
+                  color: Colors.white.withValues(alpha: used ? 0.4 : 0.92),
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  _alarming ? '停止する' : '警報を鳴らす',
+                  used
+                      ? '使用済み'
+                      : _alarming
+                          ? '発動中'
+                          : '警報を鳴らす',
                   style: GoogleFonts.shipporiMincho(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white.withValues(alpha: 0.92),
+                    color: Colors.white.withValues(alpha: used ? 0.45 : 0.92),
                     letterSpacing: 3,
                   ),
                 ),
@@ -274,13 +307,20 @@ class _ChaserPageState extends State<ChaserPage>
   }
 
   Widget _statusLine() {
+    final used = !_config.alarmArmed && !_alarming;
     return Text(
       _alarming
-          ? '‼ 警報発動中 ‼'
-          : '警報は ${_config.alarmSec} 秒間鳴り続けます',
+          ? '‼ 警報発動中（停止はできない）‼'
+          : used
+              ? '警報は使用済みです。運営の許可を待ってください。'
+              : '警報は1回限り。${_config.alarmSec} 秒間鳴り続け、途中では止められません。',
       style: GoogleFonts.shipporiMincho(
         fontSize: 13,
-        color: _alarming ? const Color(0xFFFF5545) : AppColors.boneDim,
+        color: _alarming
+            ? const Color(0xFFFF5545)
+            : used
+                ? const Color(0xFF6E6A62)
+                : AppColors.boneDim,
         letterSpacing: 2,
       ),
     );
