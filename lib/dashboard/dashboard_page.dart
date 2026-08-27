@@ -6,14 +6,16 @@ import 'dashboard_controller.dart';
 import 'game_panel.dart';
 import 'widgets/dialogs.dart';
 import 'widgets/machine_card.dart';
+import 'widgets/quick_actions_panel.dart';
 import 'widgets/role_panel.dart';
 import 'widgets/sound_panel.dart';
 
 /// 運営ダッシュボード。
 ///
 /// 白基調の日本の業務システム風UI。
+/// 最上部にクイック操作(全体リセット/警報再許可)を配置。
 /// 上部固定バーからセクションへワンタップで移動できる導線:
-///   概況 / 暗号機 / ロール / サウンド / ゲーム / 記録
+///   概況 / 暗号機 / ロール / サウンド / ゲーム
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
@@ -31,7 +33,6 @@ class _DashboardPageState extends State<DashboardPage> {
   final _keyRoles = GlobalKey();
   final _keySounds = GlobalKey();
   final _keyGame = GlobalKey();
-  final _keyLog = GlobalKey();
 
   @override
   void initState() {
@@ -143,6 +144,10 @@ class _DashboardPageState extends State<DashboardPage> {
                                 const _AllCompletedBanner(),
                               ],
 
+                              // ---- 0. クイック操作(よく使うボタン) ----
+                              const SizedBox(height: 10),
+                              QuickActionsPanel(ctrl: _ctrl),
+
                               // ---- 1. 概況 ----
                               _section(
                                 key: _keyStats,
@@ -187,15 +192,6 @@ class _DashboardPageState extends State<DashboardPage> {
                                 sub: '追加コンテンツの管理',
                                 child: const GamePanel(),
                               ),
-
-                              // ---- 6. 記録 ----
-                              if (_ctrl.events.isNotEmpty)
-                                _section(
-                                  key: _keyLog,
-                                  title: '記録',
-                                  sub: '接続・解読・スキルチェックなどの履歴',
-                                  child: _EventFeed(events: _ctrl.events),
-                                ),
                             ],
                           ),
                         ),
@@ -260,7 +256,6 @@ class _DashboardPageState extends State<DashboardPage> {
                       _navItem('ロール', () => _jumpTo(_keyRoles)),
                       _navItem('サウンド', () => _jumpTo(_keySounds)),
                       _navItem('ゲーム', () => _jumpTo(_keyGame)),
-                      _navItem('記録', () => _jumpTo(_keyLog)),
                     ],
                   ),
                 ),
@@ -722,108 +717,6 @@ class _EmptyState extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// ---------- 記録 ----------
-class _EventFeed extends StatelessWidget {
-  final List<MachineEvent> events;
-  const _EventFeed({required this.events});
-
-  IconData _icon(String type) {
-    switch (type) {
-      case 'completed':
-        return Icons.check_circle_outline;
-      case 'connect':
-      case 'connected':
-        return Icons.link;
-      case 'disconnect':
-      case 'disconnected':
-        return Icons.link_off;
-      case 'created':
-        return Icons.add_circle_outline;
-      case 'deleted':
-        return Icons.delete_outline;
-      case 'reset':
-        return Icons.restart_alt;
-      case 'skill_miss':
-        return Icons.flash_on;
-      case 'skill_success':
-        return Icons.bolt;
-      case 'speed':
-        return Icons.speed;
-      case 'sound':
-        return Icons.library_music;
-      case 'curse':
-        return Icons.auto_fix_high;
-      default:
-        return Icons.info_outline;
-    }
-  }
-
-  Color _color(String type) {
-    switch (type) {
-      case 'completed':
-      case 'skill_success':
-        return AppColors.dashGreen;
-      case 'connect':
-      case 'connected':
-      case 'speed':
-      case 'sound':
-        return AppColors.dashBlue;
-      case 'disconnect':
-      case 'disconnected':
-      case 'skill_miss':
-        return AppColors.dashAmber;
-      case 'deleted':
-        return AppColors.dashRed;
-      case 'curse':
-        return AppColors.dashCurse;
-      default:
-        return AppColors.dashGrey;
-    }
-  }
-
-  String _time(int ms) {
-    final dt = DateTime.fromMillisecondsSinceEpoch(ms);
-    two(int n) => n.toString().padLeft(2, '0');
-    return '${two(dt.hour)}:${two(dt.minute)}:${two(dt.second)}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        child: Column(
-          children: [
-            for (final e in events.take(14))
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 7),
-                child: Row(
-                  children: [
-                    Icon(_icon(e.type), size: 16, color: _color(e.type)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        e.message,
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                    ),
-                    Text(
-                      _time(e.at),
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        color: AppColors.dashGrey,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
         ),
       ),
     );
