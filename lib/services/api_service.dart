@@ -141,6 +141,38 @@ class ApiService {
         .toList();
   }
 
+  /// Full sounds payload: assets + role->url map + per-key bindings.
+  Future<SoundsData> getSoundsData() async {
+    final res = await http.get(_u('/api/sounds'), headers: _auth);
+    if (res.statusCode != 200) throw Exception('failed to get sounds');
+    return SoundsData.fromJson(
+        jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>);
+  }
+
+  /// Bind a keyboard key ("a".."z", "digit1".., "space"...) to a sound.
+  Future<void> setKeySound(String key, String soundId) async {
+    final res = await http.post(
+      _u('/api/sounds/keymap'),
+      headers: _authJson,
+      body: jsonEncode({'key': key, 'sound_id': soundId}),
+    );
+    if (res.statusCode != 200) {
+      String detail = 'failed to bind key';
+      try {
+        final body =
+            jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+        detail = (body['detail'] as String?) ?? detail;
+      } catch (_) {}
+      throw Exception(detail);
+    }
+  }
+
+  Future<void> removeKeySound(String key) async {
+    final res =
+        await http.delete(_u('/api/sounds/keymap/$key'), headers: _auth);
+    if (res.statusCode != 200) throw Exception('failed to unbind key');
+  }
+
   Future<SoundAsset> uploadSound({
     required String filename,
     required List<int> bytes,
