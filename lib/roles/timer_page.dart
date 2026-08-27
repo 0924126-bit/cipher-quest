@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import '../models/role_config.dart';
 import '../services/api_service.dart';
 import '../services/sound_service.dart';
-import '../theme/app_theme.dart';
 
 /// 廃校ホラータイマー。
 ///
