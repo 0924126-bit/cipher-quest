@@ -258,6 +258,29 @@ class ApiService {
     if (res.statusCode != 200) throw Exception('failed to update role');
   }
 
+  /// Fire the chaser's one-shot alarm.
+  /// Returns alarm seconds, or null if it was already used (409).
+  Future<int?> fireChaserAlarm() async {
+    final res =
+        await http.post(_u('/api/roles/chaser/fire'), headers: _auth);
+    if (res.statusCode == 409) return null;
+    if (res.statusCode != 200) throw Exception('failed to fire alarm');
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    return (data['alarm_sec'] as num?)?.toInt() ?? 30;
+  }
+
+  /// Re-arm the chaser alarm (dashboard).
+  Future<void> armChaserAlarm() async {
+    final res = await http.post(_u('/api/roles/chaser/arm'), headers: _auth);
+    if (res.statusCode != 200) throw Exception('failed to arm alarm');
+  }
+
+  /// Global reset: all machine progress + speeds + chaser alarm.
+  Future<void> globalReset() async {
+    final res = await http.post(_u('/api/reset'), headers: _auth);
+    if (res.statusCode != 200) throw Exception('failed to reset');
+  }
+
   /// Fire the curse. Returns the server-confirmed cooldown seconds.
   Future<int> pressCurse() async {
     final res = await http.post(_u('/api/roles/cursed/press'), headers: _auth);
