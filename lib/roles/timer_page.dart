@@ -252,61 +252,9 @@ class _TimerPageState extends State<TimerPage>
                     ),
                   ),
                 ),
-              // ---- 本体 ----
+              // ---- 本体: 蝋燭だけのシンプル構成(文字なし) ----
               SafeArea(
-                child: Column(
-                  children: [
-                    const SizedBox(height: 28),
-                    // タイトル
-                    Text(
-                      _cfg.title,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 26,
-                        letterSpacing: 10,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF9FB0A6)
-                            .withValues(alpha: _flickerLevel),
-                        shadows: const [
-                          Shadow(
-                              color: Color(0xAA000000),
-                              blurRadius: 18,
-                              offset: Offset(0, 4)),
-                          Shadow(color: Color(0x5538FF66), blurRadius: 30),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _cfg.subtitle,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        letterSpacing: 4,
-                        color: const Color(0xFF6E7D74)
-                            .withValues(alpha: 0.9 * _flickerLevel),
-                      ),
-                    ),
-                    const Spacer(),
-                    // ---- 残り時間: 儀式の蝋燭 ----
-                    if (_finished) _deadDisplay() else _candles(danger),
-                    const Spacer(),
-                    // 操作ヒント
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 22),
-                      child: Text(
-                        'SPACE / ダブルタップ : ${_running ? "停止" : "開始"}　　'
-                        'R / 長押し : リセット',
-                        style: TextStyle(
-                          fontSize: 11,
-                          letterSpacing: 2,
-                          color: const Color(0xFF4E5B54)
-                              .withValues(alpha: 0.8 * _flickerLevel),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                child: Center(child: _candles(danger)),
               ),
               // ---- ビネット ----
               IgnorePointer(
@@ -333,69 +281,21 @@ class _TimerPageState extends State<TimerPage>
     );
   }
 
-  /// 数字を使わない残り時間表示。
+  /// 数字も文字も使わない残り時間表示。
   /// 13本の儀式の蝋燭が左から順に燃え尽き、消えた蝋燭からは
-  /// 煙が立ちのぼる。残り僅かで炎が血の色に変わる。
+  /// 煙が立ちのぼる。残り僅かで炎が血の色に。刻限後は全て消え煙だけ。
   Widget _candles(bool danger) {
     final progress =
         _cfg.durationSec <= 0 ? 0.0 : _remaining / _cfg.durationSec;
-    return Column(
-      children: [
-        AnimatedBuilder(
-          animation: _flame,
-          builder: (context, _) => TimerCandles(
-            progress: progress,
-            flicker: _flickerLevel,
-            flame: _flame.value,
-            danger: danger,
-            finished: _finished,
-          ),
-        ),
-        const SizedBox(height: 14),
-        Text(
-          _running
-              ? (danger ? '― 灯が、残りわずか ―' : '― 灯が消えてゆく ―')
-              : '― 灯は静止している ―',
-          style: TextStyle(
-            fontSize: 13,
-            letterSpacing: 6,
-            color: (danger
-                    ? const Color(0xFF8A3A3A)
-                    : const Color(0xFF5E6E64))
-                .withValues(alpha: 0.9 * _flickerLevel),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _deadDisplay() {
-    return Column(
-      children: [
-        Text(
-          '刻限',
-          style: TextStyle(
-            fontSize: 96,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 20,
-            color: const Color(0xFF8B0000).withValues(alpha: _flickerLevel),
-            shadows: const [
-              Shadow(color: Color(0xFF5A0000), blurRadius: 60),
-              Shadow(color: Color(0xCC000000), blurRadius: 10),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        const Text(
-          'もう、逃げられない',
-          style: TextStyle(
-            fontSize: 16,
-            letterSpacing: 10,
-            color: Color(0xFF7A2430),
-            shadows: [Shadow(color: Color(0xFF3D0813), blurRadius: 14)],
-          ),
-        ),
-      ],
+    return AnimatedBuilder(
+      animation: _flame,
+      builder: (context, _) => TimerCandles(
+        progress: progress,
+        flicker: _flickerLevel,
+        flame: _flame.value,
+        danger: danger,
+        finished: _finished,
+      ),
     );
   }
 }
