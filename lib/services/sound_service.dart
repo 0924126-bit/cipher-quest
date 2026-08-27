@@ -17,6 +17,10 @@ class SoundService {
 
   final SoundBackend _backend = SoundBackend();
 
+  /// Per-key sound bindings for the horror timer (server keymap:
+  /// normalized key name -> mp3 url). Empty when nothing is bound.
+  Map<String, String> _keySounds = const {};
+
   /// Update role -> url assignments from a server payload.
   void updateSources(Map<String, dynamic>? roles) {
     if (roles == null) return;
@@ -54,8 +58,28 @@ class SoundService {
   void startTimerBgm() => _backend.play('timer_bgm', loop: true);
   void stopTimerBgm() => _backend.stop('timer_bgm');
 
-  /// キー音は連打されるので多重再生で鳴らす。
-  void playTimerKey() => _backend.playOneShot('timer_key');
+  /// Replace the per-key bindings (from /api/sounds `keys` or the
+  /// websocket `sounds` push).
+  void updateKeySounds(Map<String, dynamic>? keys) {
+    if (keys == null) return;
+    _keySounds = {
+      for (final e in keys.entries)
+        if (e.value is String && (e.value as String).isNotEmpty)
+          e.key: e.value as String,
+    };
+  }
+
+  /// タイマーのキー音。キー別の割当があればそれを、
+  /// なければ既定の timer_key 音を連打対応で鳴らす。
+  /// [key] は KeySoundMap.normalize 済みのキー名(null=タップなど)。
+  void playTimerKey([String? key]) {
+    final url = key == null ? null : _keySounds[key];
+    if (url != null) {
+      _backend.playOneShotUrl(url);
+    } else {
+      _backend.playOneShot('timer_key');
+    }
+  }
 
   void stopAll() => _backend.stopAll();
 }
