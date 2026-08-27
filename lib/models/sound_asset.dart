@@ -47,8 +47,40 @@ class SoundAsset {
     'skill_success': 'スキルチェック成功',
     'skill_fail': 'スキルチェック失敗',
     'timer_bgm': 'タイマーBGM（ループ）',
-    'timer_key': 'タイマーキー音',
+    'timer_key': 'タイマーキー音（既定）',
   };
 
   String get roleLabel => roleLabels[role] ?? role;
+}
+
+/// Full payload of GET /api/sounds:
+/// the uploaded assets plus the role->url map and the per-key bindings
+/// used by the horror timer (key -> url for playback, key -> sound id
+/// for the dashboard editor).
+class SoundsData {
+  final List<SoundAsset> sounds;
+  final Map<String, String> roleMap;
+  final Map<String, String> keyMap; // key -> url
+  final Map<String, String> keyBindings; // key -> sound id
+
+  const SoundsData({
+    required this.sounds,
+    required this.roleMap,
+    required this.keyMap,
+    required this.keyBindings,
+  });
+
+  factory SoundsData.fromJson(Map<String, dynamic> json) {
+    Map<String, String> strMap(dynamic v) => v is Map
+        ? v.map((k, val) => MapEntry(k.toString(), val.toString()))
+        : const {};
+    return SoundsData(
+      sounds: ((json['sounds'] as List?) ?? const [])
+          .map((e) => SoundAsset.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      roleMap: strMap(json['roles']),
+      keyMap: strMap(json['keys']),
+      keyBindings: strMap(json['key_bindings']),
+    );
+  }
 }
