@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/sound_asset.dart';
 import '../../services/file_picker_stub.dart'
     if (dart.library.js_interop) '../../services/file_picker_web.dart';
+import '../../services/key_sound_map.dart';
 import '../../theme/app_theme.dart';
 import '../dashboard_controller.dart';
 
@@ -123,10 +124,150 @@ class _SoundPanelState extends State<SoundPanel> {
                   ],
                 ],
               ),
+            // ---- タイマー: キー別効果音 ----
+            const SizedBox(height: 22),
+            _keyBindingSection(sounds),
           ],
         ),
       ),
     );
+  }
+
+  // ------------------------------------------------------------------
+  // タイマーのキー別効果音（例: 「e」→ きゅいん）。何個でも設定可。
+  // ------------------------------------------------------------------
+
+  Widget _keyBindingSection(List<SoundAsset> sounds) {
+    final bindings = widget.ctrl.keyBindings;
+    final soundById = {for (final s in sounds) s.id: s};
+    final entries = bindings.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Row(
+          children: [
+            Icon(Icons.keyboard, size: 18, color: AppColors.dashBlue),
+            SizedBox(width: 8),
+            Text(
+              'タイマーのキー別効果音',
+              style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'タイマー画面で指定のキーを押したときに鳴る音を1対1で割り当てます（何個でも追加可）。未割当のキーは「タイマーキー音（既定）」が鳴ります。',
+          style: TextStyle(fontSize: 12, color: AppColors.dashGrey),
+        ),
+        const SizedBox(height: 12),
+        if (sounds.isEmpty)
+          const Text(
+            '先にmp3をアップロードするとキーに割り当てられます。',
+            style: TextStyle(fontSize: 12.5, color: AppColors.dashGrey),
+          )
+        else ...[
+          if (entries.isNotEmpty)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final e in entries)
+                  InputChip(
+                    avatar: const Icon(Icons.keyboard_alt_outlined,
+                        size: 16, color: AppColors.dashBlue),
+                    label: Text(
+                      '${KeySoundMap.label(e.key)} → '
+                      '${soundById[e.value]?.originalName ?? '(削除済みの音)'}',
+                      style: const TextStyle(fontSize: 12.5),
+                    ),
+                    onDeleted: () => widget.ctrl.removeKeySound(e.key),
+                    deleteIconColor: AppColors.dashGrey,
+                  ),
+              ],
+            ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () => _addKeyBinding(sounds),
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('キー割当を追加'),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _addKeyBinding(List<SoundAsset> sounds) async {
+    String selKey = 'e';
+    String selSound = sounds.first.id;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDlg) => AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20)),
+          title: const Text('キー割当を追加'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('キー', style: TextStyle(fontSize: 12.5)),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<String>(
+                initialValue: selKey,
+                isExpanded: true,
+                items: [
+                  for (final k in KeySoundMap.allKeys)
+                    DropdownMenuItem(
+                        value: k, child: Text(KeySoundMap.label(k))),
+                ],
+                onChanged: (v) => setDlg(() => selKey = v ?? selKey),
+              ),
+              const SizedBox(height: 16),
+              const Text('鳴らす音', style: TextStyle(fontSize: 12.5)),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<String>(
+                initialValue: selSound,
+                isExpanded: true,
+                items: [
+                  for (final s in sounds)
+                    DropdownMenuItem(
+                      value: s.id,
+                      child: Text(s.originalName,
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                ],
+                onChanged: (v) => setDlg(() => selSound = v ?? selSound),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('キャンセル',
+                  style: TextStyle(color: AppColors.dashGrey)),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('割り当てる'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok == true && mounted) {
+      try {
+        await widget.ctrl.setKeySound(selKey, selSound);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('割当に失敗: $e'),
+            backgroundColor: AppColors.dashRed,
+          ));
+        }
+      }
+    }
   }
 
   Future<void> _confirmDelete(SoundAsset s) async {
