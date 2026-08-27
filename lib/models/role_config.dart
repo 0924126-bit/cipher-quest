@@ -70,11 +70,15 @@ class TimerConfig {
   /// 背景画像URL ('' = 内蔵の廃校背景 /images/timer_bg.jpg)。
   final String bgImage;
 
+  /// 最後に全体リセットが実行されたエポック秒（タイマーページが監視）。
+  final int resetAt;
+
   const TimerConfig({
     this.title = '償いの刻限',
     this.subtitle = '時間が尽きる前に…逃げられると思うな',
     this.durationSec = 300,
     this.bgImage = '',
+    this.resetAt = 0,
   });
 
   factory TimerConfig.fromJson(Map<String, dynamic> json) => TimerConfig(
@@ -82,6 +86,7 @@ class TimerConfig {
         subtitle: (json['subtitle'] as String?) ?? '',
         durationSec: (json['duration_sec'] as num?)?.toInt() ?? 300,
         bgImage: (json['bg_image'] as String?) ?? '',
+        resetAt: (json['reset_at'] as num?)?.toInt() ?? 0,
       );
 }
 
