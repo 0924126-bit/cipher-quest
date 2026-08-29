@@ -242,6 +242,7 @@ class ApiService {
     int? cooldownSec,
     String? notifyMessage,
     int? durationSec,
+    String? style,
   }) async {
     final res = await http.patch(
       _u('/api/roles/$role'),
@@ -253,6 +254,7 @@ class ApiService {
         if (cooldownSec != null) 'cooldown_sec': cooldownSec,
         if (notifyMessage != null) 'notify_message': notifyMessage,
         if (durationSec != null) 'duration_sec': durationSec,
+        if (style != null) 'style': style,
       }),
     );
     if (res.statusCode != 200) throw Exception('failed to update role');
