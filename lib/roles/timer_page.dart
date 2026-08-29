@@ -9,10 +9,12 @@ import '../services/api_service.dart';
 import '../services/key_sound_map.dart';
 import '../services/sound_service.dart';
 import 'widgets/timer_candles.dart';
+import 'widgets/timer_faces.dart';
 
 /// 廃校ホラータイマー。
 ///
-/// - 残り時間: 数字ではなく「儀式の蝋燭」13本が燃え尽きていく表示
+/// - 残り時間: ダッシュボードで選べる5デザイン
+///   (儀式の蝋燭 / 数字 / 血月蝕 / 血の砂時計 / 心電図)
 /// - 背景: ダッシュボードから差し替え可能な廃校画像（初期は内蔵の廃校廊下）
 /// - BGM: ループ再生（初期は合成ホラードローン、ダッシュボードでmp3差替可）
 /// - キー音: キーごとにダッシュボードで割り当てた音を再生（未割当は既定音）
@@ -264,9 +266,9 @@ class _TimerPageState extends State<TimerPage>
                     ),
                   ),
                 ),
-              // ---- 本体: 蝋燭だけのシンプル構成(文字なし) ----
+              // ---- 本体: 選択中のデザインだけのシンプル構成 ----
               SafeArea(
-                child: Center(child: _candles(danger)),
+                child: Center(child: _face(danger)),
               ),
               // ---- ビネット ----
               IgnorePointer(
@@ -293,21 +295,57 @@ class _TimerPageState extends State<TimerPage>
     );
   }
 
-  /// 数字も文字も使わない残り時間表示。
-  /// 13本の儀式の蝋燭が左から順に燃え尽き、消えた蝋燭からは
-  /// 煙が立ちのぼる。残り僅かで炎が血の色に。刻限後は全て消え煙だけ。
-  Widget _candles(bool danger) {
+  /// 選択中のデザインで残り時間を描画する。
+  /// ダッシュボードの「タイマーデザイン」設定 (_cfg.style) で切替。
+  Widget _face(bool danger) {
     final progress =
         _cfg.durationSec <= 0 ? 0.0 : _remaining / _cfg.durationSec;
     return AnimatedBuilder(
       animation: _flame,
-      builder: (context, _) => TimerCandles(
-        progress: progress,
-        flicker: _flickerLevel,
-        flame: _flame.value,
-        danger: danger,
-        finished: _finished,
-      ),
+      builder: (context, _) {
+        switch (_cfg.style) {
+          case 'digits':
+            return TimerDigits(
+              remaining: _remaining,
+              flicker: _flickerLevel,
+              danger: danger,
+              finished: _finished,
+            );
+          case 'bloodmoon':
+            return TimerBloodMoon(
+              progress: progress,
+              flicker: _flickerLevel,
+              flame: _flame.value,
+              danger: danger,
+              finished: _finished,
+            );
+          case 'hourglass':
+            return TimerHourglass(
+              progress: progress,
+              flicker: _flickerLevel,
+              flame: _flame.value,
+              danger: danger,
+              finished: _finished,
+            );
+          case 'heartbeat':
+            return TimerHeartbeat(
+              progress: progress,
+              flicker: _flickerLevel,
+              flame: _flame.value,
+              danger: danger,
+              finished: _finished,
+            );
+          case 'candles':
+          default:
+            return TimerCandles(
+              progress: progress,
+              flicker: _flickerLevel,
+              flame: _flame.value,
+              danger: danger,
+              finished: _finished,
+            );
+        }
+      },
     );
   }
 }
