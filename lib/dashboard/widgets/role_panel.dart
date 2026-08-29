@@ -429,6 +429,11 @@ class _RolePanelState extends State<RolePanel> {
           value: '${c.durationSec ~/ 60}分 ${c.durationSec % 60}秒',
           onTap: () => _editTimerDuration(c.durationSec),
         ),
+        _settingRow(
+          label: 'デザイン',
+          value: _timerStyleLabel(c.style),
+          onTap: () => _pickTimerStyle(c.style),
+        ),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -482,6 +487,78 @@ class _RolePanelState extends State<RolePanel> {
         ),
       ],
     );
+  }
+
+  // ---------- タイマーデザイン選択 ----------
+  static const List<(String, String, String, IconData)> _timerStyles = [
+    ('candles', '儀式の蝋燭', '13本の蝋燭が燃え尽きていく（数字なし・既定）',
+        Icons.local_fire_department),
+    ('digits', '数字表示', 'シンプルな残り秒数（MM:SS）。明滅つき', Icons.timer),
+    ('bloodmoon', '血月蝕', '月が闇に食われていく。残り僅かで血の色に',
+        Icons.dark_mode),
+    ('hourglass', '血の砂時計', '血が落ちきったら刻限', Icons.hourglass_bottom),
+    ('heartbeat', '心電図', '鼓動が弱まり、刻限で心停止', Icons.monitor_heart),
+  ];
+
+  String _timerStyleLabel(String style) {
+    for (final s in _timerStyles) {
+      if (s.$1 == style) return s.$2;
+    }
+    return '儀式の蝋燭';
+  }
+
+  Future<void> _pickTimerStyle(String current) async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('タイマーのデザイン', style: TextStyle(fontSize: 16)),
+        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        content: SizedBox(
+          width: 380,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final s in _timerStyles)
+                ListTile(
+                  dense: true,
+                  leading: Icon(s.$4,
+                      size: 20,
+                      color: s.$1 == current
+                          ? AppColors.dashAmber
+                          : AppColors.dashGrey),
+                  title: Text(s.$2,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: s.$1 == current
+                            ? FontWeight.w700
+                            : FontWeight.w400,
+                        color: s.$1 == current
+                            ? AppColors.dashAmber
+                            : null,
+                      )),
+                  subtitle: Text(s.$3,
+                      style: const TextStyle(
+                          fontSize: 11, color: AppColors.dashGrey)),
+                  trailing: s.$1 == current
+                      ? const Icon(Icons.check,
+                          size: 16, color: AppColors.dashAmber)
+                      : null,
+                  onTap: () => Navigator.pop(context, s.$1),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('キャンセル'),
+          ),
+        ],
+      ),
+    );
+    if (result != null && result != current) {
+      await ctrl.updateRole('timer', style: result);
+    }
   }
 
   Future<void> _editTimerDuration(int initial) async {
