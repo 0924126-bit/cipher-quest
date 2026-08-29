@@ -230,6 +230,7 @@ class DashboardController extends ChangeNotifier {
     int? cooldownSec,
     String? notifyMessage,
     int? durationSec,
+    String? style,
   }) async {
     await ApiService.instance.updateRole(
       role,
@@ -239,6 +240,7 @@ class DashboardController extends ChangeNotifier {
       cooldownSec: cooldownSec,
       notifyMessage: notifyMessage,
       durationSec: durationSec,
+      style: style,
     );
     await refreshRoles();
   }
