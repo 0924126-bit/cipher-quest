@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../services/auth_service.dart';
+import '../services/url_open.dart'
+    if (dart.library.js_interop) '../services/url_open_web.dart';
 
 /// Site-wide password lock screen.
 ///
@@ -215,8 +217,9 @@ class _LockScreenState extends State<LockScreen> {
                       // Visitors with a queue-ticket code don't need the
                       // site password: send them to the ticket page.
                       TextButton.icon(
-                        onPressed: () =>
-                            Navigator.of(context).pushNamed('/ticket'),
+                        // The Navigator lives below this gate, so use a
+                        // hash-route reload to reach the public page.
+                        onPressed: () => gotoHashRoute('/ticket'),
                         icon: const Icon(
                           Icons.confirmation_number_outlined,
                           size: 18,

@@ -13,6 +13,9 @@ import 'services/alarm_service.dart';
 import 'services/auth_service.dart';
 import 'services/pwa_service.dart';
 import 'theme/app_theme.dart';
+import 'ticket/kutikomi_page.dart';
+import 'ticket/ticket_page.dart';
+import 'ytdl/ytdl_page.dart';
 
 void main() {
   // Install mobile audio-unlock gesture listeners as early as possible
@@ -29,6 +32,12 @@ void main() {
 ///   /cursed        -> cursed one-shot curse button page
 ///   /hunter        -> hunter phone notification terminal
 ///   /passkey       -> SECRET password-change page (no links anywhere)
+///   /ytdl          -> YouTube -> mp4 staff tool
+///
+/// PUBLIC routes (NOT behind the password gate — visitors don't have
+/// the site password; the ticket code itself is the credential):
+///   /ticket        -> visitor queue-ticket page
+///   /kutikomi      -> public read-only reviews page
 ///
 /// PWA (installed app) mode is a role-only terminal: dashboard, decoder
 /// and game routes are blocked and redirect to the role selector.
@@ -43,6 +52,17 @@ enum _AuthState { checking, locked, unlocked }
 
 class _IdentityEAppState extends State<IdentityEApp> {
   _AuthState _auth = _AuthState.checking;
+
+  /// Public visitor routes bypass the site-wide password gate.
+  /// The initial platform route (URL hash) decides: a visitor landing
+  /// on /ticket or /kutikomi never sees the lock screen. Ticket access
+  /// is still protected server-side by the per-person ticket code.
+  static final bool _gateExempt = () {
+    final route =
+        WidgetsBinding.instance.platformDispatcher.defaultRouteName;
+    final path = Uri.parse(route).path;
+    return path == '/ticket' || path == '/kutikomi';
+  }();
 
   @override
   void initState() {
@@ -74,6 +94,10 @@ class _IdentityEAppState extends State<IdentityEApp> {
       // appears as soon as the token check finishes. The routed pages
       // below are not inserted into the tree until unlocked.
       builder: (context, child) {
+        // Visitor routes (/ticket, /kutikomi) skip the gate entirely.
+        if (_gateExempt) {
+          return child ?? const SizedBox.shrink();
+        }
         if (_auth == _AuthState.checking) {
           return const _AuthSplash();
         }
@@ -94,6 +118,16 @@ class _IdentityEAppState extends State<IdentityEApp> {
                   FadeTransition(opacity: anim, child: child),
               transitionDuration: const Duration(milliseconds: 400),
             );
+
+        // ---- Public visitor routes (no site password) ----
+        if (segs.length == 1) {
+          switch (segs[0]) {
+            case 'ticket':
+              return fade(const TicketPage());
+            case 'kutikomi':
+              return fade(const KutikomiPage());
+          }
+        }
 
         // ---- PWA (installed app) = role-only terminal ----
         // Any non-role route falls back to the role selector.
@@ -133,6 +167,8 @@ class _IdentityEAppState extends State<IdentityEApp> {
             case 'passkey':
               // secret page: reachable only by typing the URL
               return fade(const PasskeyPage());
+            case 'ytdl':
+              return fade(const YtdlPage());
           }
         }
 
