@@ -640,6 +640,79 @@ class _TicketPageState extends State<TicketPage> {
     );
   }
 
+  /// 通知未許可の警告バナー（緑の「通知をオンにする」ボタン付き）。
+  /// granted なら何も表示しない。denied（ブロック済み）は設定手順を案内。
+  Widget _notifyBanner() {
+    final perm = TicketStorage.notifyPermission();
+    if (perm == 'granted' || perm == 'unsupported') {
+      return const SizedBox.shrink();
+    }
+    const green = Color(0xFF188038);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF7E0),
+        border: Border.all(color: const Color(0xFFF9AB00)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.notifications_off_outlined,
+                  size: 20, color: Color(0xFFB05A00)),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '通知がオンになっていません。このままでは通知がきません。',
+                  style: TextStyle(
+                      fontSize: 13.5,
+                      color: Color(0xFFB05A00),
+                      fontWeight: FontWeight.w600,
+                      height: 1.5),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (perm == 'denied')
+            const Text(
+              '通知がブロックされています。ブラウザの設定（サイトの許可 → 通知）から許可してください。',
+              style: TextStyle(fontSize: 12.5, color: _sub, height: 1.6),
+            )
+          else
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                style: TextButton.styleFrom(
+                  foregroundColor: green,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                ),
+                onPressed: () {
+                  TicketStorage.requestNotifyPermission();
+                  // 許可ダイアログの結果を反映（少し待って再描画）
+                  Future.delayed(const Duration(seconds: 2), () {
+                    if (mounted) setState(() {});
+                  });
+                  Future.delayed(const Duration(seconds: 6), () {
+                    if (mounted) setState(() {});
+                  });
+                },
+                icon: const Icon(Icons.notifications_active_outlined,
+                    size: 18),
+                label: const Text('通知をオンにする',
+                    style: TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w700)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _ticketTab(Ticket t) {
     return RefreshIndicator(
       color: _accent,
@@ -653,6 +726,7 @@ class _TicketPageState extends State<TicketPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                _notifyBanner(),
                 // ---- 券面 ----
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 36),
