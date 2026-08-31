@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/machine.dart';
 import '../models/role_config.dart';
 import '../models/sound_asset.dart';
+import '../models/ticket.dart';
 import 'auth_service.dart';
 
 /// REST API client. Base URL is same-origin (server hosts the Flutter build).
@@ -380,6 +381,198 @@ class ApiService {
   Future<Map<String, dynamic>> gameForceEnd() async {
     final res = await http.post(_u('/api/game/force_end'), headers: _auth);
     if (res.statusCode != 200) throw Exception('failed to force end');
+    return jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  // ==================================================================
+  // 音響エフェクト（音割れ / 爆音 / 再生速度）
+  // ==================================================================
+
+  Future<void> setSoundFx(
+    String role, {
+    int? volume,
+    int? distortion,
+    double? rate,
+  }) async {
+    final res = await http.patch(
+      _u('/api/sounds/fx/$role'),
+      headers: _authJson,
+      body: jsonEncode({
+        if (volume != null) 'volume': volume,
+        if (distortion != null) 'distortion': distortion,
+        if (rate != null) 'rate': rate,
+      }),
+    );
+    if (res.statusCode != 200) throw Exception('failed to set sound fx');
+  }
+
+  // ==================================================================
+  // 整理券 — スタッフ側（サイトパスワード認証）
+  // ==================================================================
+
+  Future<(List<Ticket>, TicketSettings, int)> listTickets() async {
+    final res = await http.get(_u('/api/tickets'), headers: _auth);
+    if (res.statusCode != 200) throw Exception('failed to list tickets');
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    final tickets = ((data['tickets'] as List?) ?? const [])
+        .map((e) => Ticket.fromJson(e as Map<String, dynamic>))
+        .toList();
+    final settings = TicketSettings.fromJson(
+        (data['settings'] as Map<String, dynamic>?) ?? const {});
+    return (tickets, settings, (data['active'] as num?)?.toInt() ?? 0);
+  }
+
+  Future<Ticket> issueTicket({required String kind, String label = ''}) async {
+    final res = await http.post(
+      _u('/api/tickets'),
+      headers: _authJson,
+      body: jsonEncode({'kind': kind, 'label': label}),
+    );
+    if (res.statusCode != 200) {
+      final data =
+          jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      throw Exception((data['detail'] as String?) ?? 'failed to issue');
+    }
+    return Ticket.fromJson(
+        jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>);
+  }
+
+  Future<void> updateTicketSettings({
+    int? gameSec,
+    int? intervalSec,
+    int? capacity,
+    int? lateCancelSec,
+    bool? reviewsEnabled,
+  }) async {
+    final res = await http.patch(
+      _u('/api/tickets/settings'),
+      headers: _authJson,
+      body: jsonEncode({
+        if (gameSec != null) 'game_sec': gameSec,
+        if (intervalSec != null) 'interval_sec': intervalSec,
+        if (capacity != null) 'capacity': capacity,
+        if (lateCancelSec != null) 'late_cancel_sec': lateCancelSec,
+        if (reviewsEnabled != null) 'reviews_enabled': reviewsEnabled,
+      }),
+    );
+    if (res.statusCode != 200) throw Exception('failed to update settings');
+  }
+
+  /// action: call / start / finish / cancel / requeue / read
+  Future<bool> ticketAction(String id, String action) async {
+    final res =
+        await http.post(_u('/api/tickets/$id/$action'), headers: _auth);
+    return res.statusCode == 200;
+  }
+
+  /// kind: 'chat'（会話） or 'notify'（任意の通知）
+  Future<void> ticketStaffMessage(String id, String kind, String text) async {
+    final res = await http.post(
+      _u('/api/tickets/$id/$kind'),
+      headers: _authJson,
+      body: jsonEncode({'text': text}),
+    );
+    if (res.statusCode != 200) throw Exception('failed to send');
+  }
+
+  Future<void> deleteTicket(String id) async {
+    final res = await http.delete(_u('/api/tickets/$id'), headers: _auth);
+    if (res.statusCode != 200) throw Exception('failed to delete');
+  }
+
+  // ==================================================================
+  // 整理券 — 来場者側（整理券コードが認証。サイトパスワード不要）
+  // ==================================================================
+
+  Future<Ticket?> ticketLogin(String code) async {
+    final res = await http.post(
+      _u('/api/ticket/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'code': code}),
+    );
+    if (res.statusCode == 401) return null;
+    if (res.statusCode == 429) throw Exception('rate_limited');
+    if (res.statusCode != 200) throw Exception('failed to login');
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    return Ticket.fromJson(data['ticket'] as Map<String, dynamic>);
+  }
+
+  Future<Ticket?> ticketState(String code) async {
+    final res = await http.post(
+      _u('/api/ticket/state'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'code': code}),
+    );
+    if (res.statusCode != 200) return null;
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    return Ticket.fromJson(data['ticket'] as Map<String, dynamic>);
+  }
+
+  Future<Ticket?> ticketCancel(String code) async {
+    final res = await http.post(
+      _u('/api/ticket/cancel'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'code': code}),
+    );
+    if (res.statusCode != 200) return null;
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    return Ticket.fromJson(data['ticket'] as Map<String, dynamic>);
+  }
+
+  Future<Ticket?> ticketChat(String code, String text) async {
+    final res = await http.post(
+      _u('/api/ticket/chat'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'code': code, 'text': text}),
+    );
+    if (res.statusCode != 200) return null;
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    return Ticket.fromJson(data['ticket'] as Map<String, dynamic>);
+  }
+
+  Future<void> ticketMarkRead(String code) async {
+    await http.post(
+      _u('/api/ticket/read'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'code': code}),
+    );
+  }
+
+  /// 口コミ投稿（体験済みの整理券コードのみ・1回限り）。
+  /// 成功で null、失敗でエラーメッセージを返す。
+  Future<String?> postReview(String code, int stars, String text) async {
+    final res = await http.post(
+      _u('/api/ticket/review'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'code': code, 'stars': stars, 'text': text}),
+    );
+    if (res.statusCode == 200) return null;
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    return (data['detail'] as String?) ?? '投稿に失敗しました';
+  }
+
+  /// 公開口コミ一覧（認証不要）。
+  Future<(bool, List<Review>)> listReviews() async {
+    final res = await http.get(_u('/api/reviews'));
+    if (res.statusCode != 200) return (false, const <Review>[]);
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    final reviews = ((data['reviews'] as List?) ?? const [])
+        .map((e) => Review.fromJson(e as Map<String, dynamic>))
+        .toList();
+    return ((data['enabled'] as bool?) ?? false, reviews);
+  }
+
+  // ==================================================================
+  // YouTube -> mp4
+  // ==================================================================
+
+  Future<Map<String, dynamic>> resolveYoutube(String url) async {
+    final res = await http.post(
+      _u('/api/ytdl'),
+      headers: _authJson,
+      body: jsonEncode({'url': url}),
+    );
+    if (res.statusCode != 200) throw Exception('failed to resolve');
     return jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
   }
 }
