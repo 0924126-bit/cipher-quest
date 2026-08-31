@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../models/machine.dart';
 import '../models/role_config.dart';
 import '../models/sound_asset.dart';
+import '../models/ticket.dart';
 import '../services/alarm_service.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
@@ -51,10 +52,11 @@ class DashboardController extends ChangeNotifier {
       error = '$e';
       notifyListeners();
     }
-    // sounds / roles are non-critical; load separately
+    // sounds / roles / tickets are non-critical; load separately
     refreshSounds();
     refreshRoles();
     refreshKeyBindings();
+    refreshTickets();
   }
 
   Future<void> refreshSounds() async {
@@ -120,6 +122,9 @@ class DashboardController extends ChangeNotifier {
           }
           notifyListeners();
         }
+        break;
+      case 'tickets_changed':
+        refreshTickets();
         break;
     }
   }
@@ -292,12 +297,28 @@ class DashboardController extends ChangeNotifier {
   /// key -> sound id (ダッシュボードのキー割当エディタ用)。
   Map<String, String> keyBindings = const {};
 
+  /// role -> 音響エフェクト（音量/音割れ/速度）。
+  Map<String, SoundFx> fxMap = const {};
+
   Future<void> refreshKeyBindings() async {
     try {
       final data = await ApiService.instance.getSoundsData();
       keyBindings = data.keyBindings;
+      fxMap = data.fxMap;
       notifyListeners();
     } catch (_) {}
+  }
+
+  /// FXを即時適用（再生中の端末にもWSで即反映）。
+  Future<void> setSoundFx(
+    String role, {
+    int? volume,
+    int? distortion,
+    double? rate,
+  }) async {
+    await ApiService.instance
+        .setSoundFx(role, volume: volume, distortion: distortion, rate: rate);
+    await refreshKeyBindings();
   }
 
   Future<void> setKeySound(String key, String soundId) async {
@@ -308,6 +329,64 @@ class DashboardController extends ChangeNotifier {
   Future<void> removeKeySound(String key) async {
     await ApiService.instance.removeKeySound(key);
     await refreshKeyBindings();
+  }
+
+  // ---------- 整理券 ----------
+
+  List<Ticket> tickets = const [];
+  TicketSettings ticketSettings = const TicketSettings();
+  int ticketActive = 0;
+  bool ticketsLoaded = false;
+
+  Future<void> refreshTickets() async {
+    try {
+      final (list, settings, active) =
+          await ApiService.instance.listTickets();
+      tickets = list;
+      ticketSettings = settings;
+      ticketActive = active;
+      ticketsLoaded = true;
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<Ticket> issueTicket({required String kind, String label = ''}) async {
+    final t = await ApiService.instance.issueTicket(kind: kind, label: label);
+    await refreshTickets();
+    return t;
+  }
+
+  Future<bool> ticketAction(String id, String action) async {
+    final ok = await ApiService.instance.ticketAction(id, action);
+    await refreshTickets();
+    return ok;
+  }
+
+  Future<void> ticketStaffMessage(String id, String kind, String text) async {
+    await ApiService.instance.ticketStaffMessage(id, kind, text);
+    await refreshTickets();
+  }
+
+  Future<void> deleteTicket(String id) async {
+    await ApiService.instance.deleteTicket(id);
+    await refreshTickets();
+  }
+
+  Future<void> updateTicketSettings({
+    int? gameSec,
+    int? intervalSec,
+    int? capacity,
+    int? lateCancelSec,
+    bool? reviewsEnabled,
+  }) async {
+    await ApiService.instance.updateTicketSettings(
+      gameSec: gameSec,
+      intervalSec: intervalSec,
+      capacity: capacity,
+      lateCancelSec: lateCancelSec,
+      reviewsEnabled: reviewsEnabled,
+    );
+    await refreshTickets();
   }
 
   @override
