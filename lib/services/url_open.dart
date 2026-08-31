@@ -6,3 +6,6 @@ void gotoHashRoute(String route) {}
 
 /// Stub same-tab navigation (non-web platforms): no-op.
 void gotoUrl(String url) {}
+
+/// Stub URL query cleanup (non-web platforms): no-op.
+void clearUrlQuery() {}

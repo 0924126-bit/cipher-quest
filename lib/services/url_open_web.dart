@@ -19,3 +19,12 @@ void gotoHashRoute(String route) {
 void gotoUrl(String url) {
   web.window.location.href = url;
 }
+
+/// Removes query parameters from the address bar without reloading
+/// (keeps path and hash). Used to strip OAuth tokens after login.
+void clearUrlQuery() {
+  try {
+    final loc = web.window.location;
+    web.window.history.replaceState(null, '', '${loc.pathname}${loc.hash}');
+  } catch (_) {}
+}
