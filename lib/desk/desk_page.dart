@@ -114,6 +114,10 @@ class _DeskPageState extends State<DeskPage> {
       ..sort((a, b) => a.calledAt.compareTo(b.calledAt));
     final waiting = _tickets.where((t) => t.status == 'waiting').toList()
       ..sort((a, b) => a.position.compareTo(b.position));
+    // 直近のキャンセル（誤操作の取り消し用。新しい順に最大10件）
+    final cancelled = _tickets.where((t) => t.status == 'cancelled').toList()
+      ..sort((a, b) => b.cancelledAt.compareTo(a.cancelledAt));
+    final recentCancelled = cancelled.take(10).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -162,12 +166,32 @@ class _DeskPageState extends State<DeskPage> {
                   else
                     for (final t in called) _calledCard(t),
                   const SizedBox(height: 20),
-                  _sectionLabel('待機列（上から順に「呼出」）', _accent),
+                  _sectionLabel('待機列（上から順に「呼出」・${waiting.length}組）', _accent),
                   if (waiting.isEmpty)
                     _emptyCard('待機中の組はありません')
-                  else
+                  else if (waiting.length <= 8)
                     for (var i = 0; i < waiting.length; i++)
-                      _waitingCard(waiting[i], i),
+                      _waitingCard(waiting[i], i)
+                  else
+                    // 人数が多いときは専用スクロール枠（遅延生成で軽い）
+                    Container(
+                      height: 560,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: _line),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(8),
+                        itemCount: waiting.length,
+                        itemBuilder: (context, i) =>
+                            _waitingCard(waiting[i], i),
+                      ),
+                    ),
+                  if (recentCancelled.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    _sectionLabel('直近のキャンセル（間違えたら「列に戻す」）', _red),
+                    for (final t in recentCancelled) _cancelledCard(t),
+                  ],
                   const SizedBox(height: 40),
                 ],
               ),
@@ -395,6 +419,57 @@ class _DeskPageState extends State<DeskPage> {
                     child: const Text('呼出',
                         style: TextStyle(fontSize: 16, color: _accent)),
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---- キャンセル済み: 「列に戻す」で誤操作を取り消し ----
+  Widget _cancelledCard(Ticket t) {
+    final reason = switch (t.cancelReason) {
+      'late' => '遅刻自動',
+      'user' => '本人',
+      _ => '運営',
+    };
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFDF7F7),
+        border: Border.all(color: _line),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_title(t),
+                    style: const TextStyle(
+                        fontSize: 18,
+                        color: _ink,
+                        fontWeight: FontWeight.w500)),
+                Text('$reasonキャンセル・${_elapsed(t.cancelledAt)}前',
+                    style: const TextStyle(fontSize: 12, color: _sub)),
+              ],
+            ),
+          ),
+          SizedBox(
+            width: 110,
+            height: 48,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: _accent),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: _busy ? null : () => _action(t, 'requeue'),
+              icon: const Icon(Icons.undo, size: 16, color: _accent),
+              label: const Text('列に戻す',
+                  style: TextStyle(fontSize: 14, color: _accent)),
+            ),
           ),
         ],
       ),
