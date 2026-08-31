@@ -451,6 +451,7 @@ class ApiService {
     int? reserveSlotSec,
     int? reserveSlotCapacity,
     List<ReserveWindow>? reserveWindows,
+    List<String>? reserveAllowedEmails,
   }) async {
     final res = await http.patch(
       _u('/api/tickets/settings'),
@@ -467,6 +468,8 @@ class ApiService {
           'reserve_slot_capacity': reserveSlotCapacity,
         if (reserveWindows != null)
           'reserve_windows': reserveWindows.map((w) => w.toJson()).toList(),
+        if (reserveAllowedEmails != null)
+          'reserve_allowed_emails': reserveAllowedEmails,
       }),
     );
     if (res.statusCode != 200) throw Exception('failed to update settings');
@@ -492,14 +495,39 @@ class ApiService {
     );
   }
 
-  /// 予約作成。成功で (code, ticket)、失敗で例外（メッセージ入り）。
-  Future<(String, Ticket)> reserveCreate(int slotStart, String label) async {
+  /// 予約ログインセッションの検証。有効ならメール、無効なら null。
+  Future<String?> reserveMe(String session) async {
+    try {
+      final res = await http.post(
+        _u('/api/reserve/me'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'session': session}),
+      );
+      if (res.statusCode != 200) return null;
+      final data =
+          jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      final email = data['email'] as String?;
+      return (email == null || email.isEmpty) ? null : email;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 予約作成（Googleログイン必須）。成功で (code, ticket)、
+  /// 失敗で例外（401/403は 'AUTH:' プレフィックス付き→再ログイン誘導）。
+  Future<(String, Ticket)> reserveCreate(
+      int slotStart, String label, String session) async {
     final res = await http.post(
       _u('/api/reserve'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'slot_start': slotStart, 'label': label}),
+      body: jsonEncode(
+          {'slot_start': slotStart, 'label': label, 'session': session}),
     );
     final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    if (res.statusCode == 401 || res.statusCode == 403) {
+      throw Exception(
+          'AUTH:${(data['detail'] as String?) ?? 'Googleログインが必要です'}');
+    }
     if (res.statusCode != 200) {
       throw Exception((data['detail'] as String?) ?? '予約に失敗しました');
     }
