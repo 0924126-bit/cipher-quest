@@ -29,7 +29,7 @@ class TicketChatMsg {
 class Ticket {
   final String id;
   final String code; // staff view only ('' for user view / paper)
-  final String number; // IDENTITYE アナグラム
+  final String number; // 連番（1, 2, 3, ...）
   final String kind; // 'online' | 'paper'
   final String label;
   final String status; // waiting/called/playing/done/cancelled
@@ -43,6 +43,7 @@ class Ticket {
   final int userUnread;
   final int staffUnread;
   final bool reviewPosted;
+  final int reservedSlot; // 予約スロット開始（epoch sec、0=当日券）
   final int position; // 0-based queue position (-1 = not queued)
   final int etaSec;
   // user view extras
@@ -68,6 +69,7 @@ class Ticket {
     required this.userUnread,
     required this.staffUnread,
     required this.reviewPosted,
+    this.reservedSlot = 0,
     required this.position,
     required this.etaSec,
     required this.gameSec,
@@ -95,6 +97,7 @@ class Ticket {
         userUnread: (json['user_unread'] as num?)?.toInt() ?? 0,
         staffUnread: (json['staff_unread'] as num?)?.toInt() ?? 0,
         reviewPosted: (json['review_posted'] as bool?) ?? false,
+        reservedSlot: (json['reserved_slot'] as num?)?.toInt() ?? 0,
         position: (json['position'] as num?)?.toInt() ?? -1,
         etaSec: (json['eta_sec'] as num?)?.toInt() ?? 0,
         gameSec: (json['game_sec'] as num?)?.toInt() ?? 180,
@@ -117,12 +120,62 @@ class Ticket {
   String get statusLabel => statusLabels[status] ?? status;
 }
 
+/// 予約可能な日時ウィンドウ（スタッフがダッシュボードで設定）。
+class ReserveWindow {
+  final String date; // "YYYY-MM-DD"
+  final String start; // "HH:MM"
+  final String end; // "HH:MM"
+
+  const ReserveWindow({
+    required this.date,
+    required this.start,
+    required this.end,
+  });
+
+  factory ReserveWindow.fromJson(Map<String, dynamic> json) => ReserveWindow(
+        date: (json['date'] as String?) ?? '',
+        start: (json['start'] as String?) ?? '',
+        end: (json['end'] as String?) ?? '',
+      );
+
+  Map<String, dynamic> toJson() => {'date': date, 'start': start, 'end': end};
+}
+
+/// 予約スロット（空き照会の戻り）。
+class ReserveSlot {
+  final int start; // epoch sec
+  final int end;
+  final int capacity;
+  final int reserved;
+  final int available;
+
+  const ReserveSlot({
+    required this.start,
+    required this.end,
+    required this.capacity,
+    required this.reserved,
+    required this.available,
+  });
+
+  factory ReserveSlot.fromJson(Map<String, dynamic> json) => ReserveSlot(
+        start: (json['start'] as num?)?.toInt() ?? 0,
+        end: (json['end'] as num?)?.toInt() ?? 0,
+        capacity: (json['capacity'] as num?)?.toInt() ?? 0,
+        reserved: (json['reserved'] as num?)?.toInt() ?? 0,
+        available: (json['available'] as num?)?.toInt() ?? 0,
+      );
+}
+
 class TicketSettings {
   final int gameSec;
   final int intervalSec;
   final int capacity;
   final int lateCancelSec;
   final bool reviewsEnabled;
+  final bool reserveEnabled;
+  final int reserveSlotSec;
+  final int reserveSlotCapacity;
+  final List<ReserveWindow> reserveWindows;
 
   const TicketSettings({
     this.gameSec = 180,
@@ -130,6 +183,10 @@ class TicketSettings {
     this.capacity = 200,
     this.lateCancelSec = 900,
     this.reviewsEnabled = true,
+    this.reserveEnabled = true,
+    this.reserveSlotSec = 1800,
+    this.reserveSlotCapacity = 5,
+    this.reserveWindows = const [],
   });
 
   factory TicketSettings.fromJson(Map<String, dynamic> json) => TicketSettings(
@@ -138,6 +195,13 @@ class TicketSettings {
         capacity: (json['capacity'] as num?)?.toInt() ?? 200,
         lateCancelSec: (json['late_cancel_sec'] as num?)?.toInt() ?? 900,
         reviewsEnabled: (json['reviews_enabled'] as bool?) ?? true,
+        reserveEnabled: (json['reserve_enabled'] as bool?) ?? true,
+        reserveSlotSec: (json['reserve_slot_sec'] as num?)?.toInt() ?? 1800,
+        reserveSlotCapacity:
+            (json['reserve_slot_capacity'] as num?)?.toInt() ?? 5,
+        reserveWindows: ((json['reserve_windows'] as List?) ?? const [])
+            .map((e) => ReserveWindow.fromJson(e as Map<String, dynamic>))
+            .toList(),
       );
 }
 
