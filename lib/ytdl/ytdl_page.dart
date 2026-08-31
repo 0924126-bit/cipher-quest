@@ -151,6 +151,23 @@ class _YtdlPageState extends State<YtdlPage> {
                     style:
                         const TextStyle(fontSize: 12.5, color: Color(0xFFD93025)),
                   ),
+                  const SizedBox(height: 10),
+                  // 自動変換が全滅している時の手動フォールバック
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      final u = Uri.encodeComponent(_urlCtrl.text.trim());
+                      openUrl('https://cobalt.tools/?u=$u');
+                    },
+                    icon: const Icon(Icons.open_in_new, size: 16),
+                    label: const Text(
+                      'cobalt.tools で手動変換（新しいタブ）',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _accent,
+                      side: const BorderSide(color: _line),
+                    ),
+                  ),
                 ],
                 if (_resultUrl != null) ...[
                   const SizedBox(height: 22),
