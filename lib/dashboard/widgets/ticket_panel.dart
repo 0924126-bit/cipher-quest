@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/ticket.dart';
+import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../dashboard_controller.dart';
 
@@ -448,6 +449,13 @@ class _TicketPanelState extends State<TicketPanel> {
             color: s.reviewsEnabled ? AppColors.dashBlue : AppColors.dashGrey,
           ),
         ),
+        ActionChip(
+          onPressed: _manageReviews,
+          avatar: const Icon(Icons.rate_review_outlined,
+              size: 16, color: AppColors.dashBlue),
+          label: const Text('口コミ管理',
+              style: TextStyle(fontSize: 12.5, color: AppColors.dashBlue)),
+        ),
         // ---- 予約設定 ----
         FilterChip(
           selected: s.reserveEnabled,
@@ -481,6 +489,14 @@ class _TicketPanelState extends State<TicketPanel> {
               style: TextStyle(fontSize: 12.5, color: AppColors.dashBlue)),
         ),
       ],
+    );
+  }
+
+  // ---- 口コミ管理（一覧・削除） ----
+  Future<void> _manageReviews() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => const _ReviewModerationDialog(),
     );
   }
 
@@ -1167,6 +1183,165 @@ class _TicketChatDialogState extends State<_TicketChatDialog> {
           onPressed: () => Navigator.pop(context),
           child:
               const Text('閉じる', style: TextStyle(color: AppColors.dashGrey)),
+        ),
+      ],
+    );
+  }
+}
+
+/// 口コミ管理ダイアログ: 一覧表示と削除（モデレーション）。
+class _ReviewModerationDialog extends StatefulWidget {
+  const _ReviewModerationDialog();
+
+  @override
+  State<_ReviewModerationDialog> createState() =>
+      _ReviewModerationDialogState();
+}
+
+class _ReviewModerationDialogState extends State<_ReviewModerationDialog> {
+  List<Review> _reviews = const [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final (_, reviews) = await ApiService.instance.listReviews();
+      if (!mounted) return;
+      setState(() {
+        _reviews = reviews;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = '読み込みに失敗しました';
+      });
+    }
+  }
+
+  Future<void> _delete(Review r) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('口コミを削除'),
+        content: Text(
+            'No.${r.ticketNumber} ★${r.stars}\n「${r.text}」\n\nこの口コミを削除しますか？'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('キャンセル')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('削除する'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final done = await ApiService.instance.deleteReview(r.id);
+    if (!mounted) return;
+    if (done) {
+      setState(() => _reviews = _reviews.where((x) => x.id != r.id).toList());
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('削除に失敗しました')),
+      );
+    }
+  }
+
+  String _when(int at) {
+    final d = DateTime.fromMillisecondsSinceEpoch(at * 1000);
+    return '${d.month}/${d.day} ${d.hour}:${d.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Row(
+        children: [
+          const Icon(Icons.rate_review_outlined,
+              size: 20, color: AppColors.dashBlue),
+          const SizedBox(width: 8),
+          Text('口コミ管理（${_reviews.length}件）'),
+        ],
+      ),
+      content: SizedBox(
+        width: 480,
+        height: 420,
+        child: _loading
+            ? const Center(child: CircularProgressIndicator(strokeWidth: 2.5))
+            : _error != null
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_error!),
+                        const SizedBox(height: 8),
+                        TextButton(
+                            onPressed: _load, child: const Text('再読み込み')),
+                      ],
+                    ),
+                  )
+                : _reviews.isEmpty
+                    ? const Center(
+                        child: Text('口コミはまだありません',
+                            style: TextStyle(color: AppColors.dashGrey)))
+                    : ListView.separated(
+                        itemCount: _reviews.length,
+                        separatorBuilder: (_, _) =>
+                            const Divider(height: 1),
+                        itemBuilder: (ctx, i) {
+                          final r = _reviews[i];
+                          return ListTile(
+                            dense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 2),
+                            title: Row(
+                              children: [
+                                Text('★' * r.stars,
+                                    style: const TextStyle(
+                                        color: Color(0xFFF9AB00),
+                                        fontSize: 13)),
+                                const SizedBox(width: 8),
+                                Text('No.${r.ticketNumber}',
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.dashGrey)),
+                                const SizedBox(width: 8),
+                                Text(_when(r.at),
+                                    style: const TextStyle(
+                                        fontSize: 11.5,
+                                        color: AppColors.dashGrey)),
+                              ],
+                            ),
+                            subtitle: Text(r.text,
+                                style: const TextStyle(fontSize: 13.5)),
+                            trailing: IconButton(
+                              tooltip: '削除',
+                              icon: const Icon(Icons.delete_outline,
+                                  size: 20, color: Colors.red),
+                              onPressed: () => _delete(r),
+                            ),
+                          );
+                        },
+                      ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('閉じる'),
         ),
       ],
     );
