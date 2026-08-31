@@ -127,6 +127,10 @@ class _SoundPanelState extends State<SoundPanel> {
             // ---- タイマー: キー別効果音 ----
             const SizedBox(height: 22),
             _keyBindingSection(sounds),
+
+            // ---- 音響エフェクト（爆音・音割れ・速度） ----
+            const SizedBox(height: 22),
+            _fxSection(),
           ],
         ),
       ),
@@ -268,6 +272,256 @@ class _SoundPanelState extends State<SoundPanel> {
         }
       }
     }
+  }
+
+  // ------------------------------------------------------------------
+  // 音響エフェクト: 用途ごとに 音量(0〜10000%) / 音割れ(0〜100) /
+  // 再生速度(0.25〜4x)。変更は再生中の端末にも即時反映（途中ブースト）。
+  // ------------------------------------------------------------------
+
+  static const _fxRoles = <String, String>{
+    'decode': '解読中ループ',
+    'complete': '解読完了',
+    'skill_warn': 'スキルチェック出現',
+    'skill_success': 'スキルチェック成功',
+    'skill_fail': 'スキルチェック失敗',
+    'timer_bgm': 'タイマーBGM',
+    'timer_key': 'タイマーキー音',
+  };
+
+  String _fxSummary(SoundFx fx) {
+    if (fx.isNeutral) return '標準';
+    final parts = <String>[];
+    if (fx.volume != 100) parts.add('音量${fx.volume}%');
+    if (fx.distortion > 0) parts.add('音割れ${fx.distortion}');
+    if (fx.rate != 1.0) parts.add('${fx.rate.toStringAsFixed(2)}x');
+    return parts.join(' · ');
+  }
+
+  Widget _fxSection() {
+    final fxMap = widget.ctrl.fxMap;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Row(
+          children: [
+            Icon(Icons.graphic_eq, size: 18, color: AppColors.dashBlue),
+            SizedBox(width: 8),
+            Text(
+              '音響エフェクト（爆音・音割れ・再生速度）',
+              style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          '用途ごとに音量（0〜10000%）・音割れの強さ（0〜100）・再生速度（0.25〜4倍）を設定できます。'
+          '変更は再生中の端末にも即時反映されるので、ゲーム中に途中ブーストできます。',
+          style: TextStyle(fontSize: 12, color: AppColors.dashGrey),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final e in _fxRoles.entries)
+              Builder(builder: (context) {
+                final fx = fxMap[e.key] ?? const SoundFx();
+                final active = !fx.isNeutral;
+                return InkWell(
+                  onTap: () => _openFxDialog(e.key, e.value),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: active
+                            ? AppColors.dashBlue
+                            : AppColors.dashLine,
+                      ),
+                      color: active
+                          ? AppColors.dashBlue.withValues(alpha: 0.05)
+                          : null,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(e.value,
+                            style: const TextStyle(
+                                fontSize: 10.5,
+                                color: AppColors.dashGrey)),
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _fxSummary(fx),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: active
+                                    ? AppColors.dashBlue
+                                    : null,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.tune,
+                                size: 12, color: AppColors.dashGrey),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openFxDialog(String role, String label) async {
+    var fx = widget.ctrl.fxMap[role] ?? const SoundFx();
+    double vol = fx.volume.toDouble();
+    double dist = fx.distortion.toDouble();
+    double rate = fx.rate;
+    bool applying = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDlg) {
+          Future<void> apply() async {
+            if (applying) return;
+            setDlg(() => applying = true);
+            try {
+              await widget.ctrl.setSoundFx(
+                role,
+                volume: vol.round(),
+                distortion: dist.round(),
+                rate: double.parse(rate.toStringAsFixed(2)),
+              );
+            } catch (_) {
+            } finally {
+              setDlg(() => applying = false);
+            }
+          }
+
+          Widget sliderRow({
+            required String name,
+            required String valueLabel,
+            required double value,
+            required double min,
+            required double max,
+            int? divisions,
+            required ValueChanged<double> onChanged,
+          }) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(name, style: const TextStyle(fontSize: 12.5)),
+                    const Spacer(),
+                    Text(valueLabel,
+                        style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.dashBlue)),
+                  ],
+                ),
+                Slider(
+                  value: value.clamp(min, max),
+                  min: min,
+                  max: max,
+                  divisions: divisions,
+                  onChanged: onChanged,
+                  // ドラッグ終了時に即反映（途中ブースト）
+                  onChangeEnd: (_) => apply(),
+                ),
+              ],
+            );
+          }
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text('音響エフェクト — $label',
+                      style: const TextStyle(fontSize: 16)),
+                ),
+                if (applying)
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+              ],
+            ),
+            content: SizedBox(
+              width: 380,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  sliderRow(
+                    name: '音量',
+                    valueLabel: '${vol.round()}%',
+                    value: vol,
+                    min: 0,
+                    max: 10000,
+                    divisions: 200,
+                    onChanged: (v) => setDlg(() => vol = v),
+                  ),
+                  sliderRow(
+                    name: '音割れ（ディストーション）',
+                    valueLabel: dist.round() == 0 ? 'なし' : '${dist.round()}',
+                    value: dist,
+                    min: 0,
+                    max: 100,
+                    divisions: 100,
+                    onChanged: (v) => setDlg(() => dist = v),
+                  ),
+                  sliderRow(
+                    name: '再生速度',
+                    valueLabel: '${rate.toStringAsFixed(2)}x',
+                    value: rate,
+                    min: 0.25,
+                    max: 4.0,
+                    divisions: 75,
+                    onChanged: (v) => setDlg(() => rate = v),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  setDlg(() {
+                    vol = 100;
+                    dist = 0;
+                    rate = 1.0;
+                  });
+                  apply();
+                },
+                child: const Text('標準に戻す',
+                    style: TextStyle(color: AppColors.dashGrey)),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('閉じる'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    // ダイアログを閉じたら最新値で再描画
+    fx = widget.ctrl.fxMap[role] ?? const SoundFx();
+    if (mounted) setState(() {});
   }
 
   Future<void> _confirmDelete(SoundAsset s) async {
