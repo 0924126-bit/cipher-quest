@@ -6,6 +6,8 @@ void storeTicketCode(String? code) {}
 String? loadTicketCache() => null;
 void storeTicketCache(String json) {}
 void requestNotifyPermission() {}
+
+String notifyPermission() => 'unsupported';
 void showNotification(String title, String body) {}
 void vibrate() {}
 String? loadReserveSession() => null;

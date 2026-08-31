@@ -95,16 +95,50 @@ void requestNotifyPermission() {
   } catch (_) {}
 }
 
+/// 通知の許可状態: 'granted' | 'denied' | 'default' | 'unsupported'。
+String notifyPermission() {
+  try {
+    return web.Notification.permission;
+  } catch (_) {
+    return 'unsupported';
+  }
+}
+
 /// 通知を表示（許可済みのときだけ）。タブが背面でも届く。
+///
+/// Android Chrome では `new Notification()` が例外になる
+/// （Service Worker 経由が必須）ため、SW registration の
+/// showNotification を優先し、失敗時のみ直接生成にフォールバック。
+/// ※これまで通知が全く出なかったAndroid実機の修正。
 void showNotification(String title, String body) {
   try {
-    if (web.Notification.permission == 'granted') {
+    if (web.Notification.permission != 'granted') return;
+    final opts = web.NotificationOptions(
+      body: body,
+      tag: 'identity-e-ticket',
+    );
+    // 1) Service Worker 経由（Android Chrome / PWA で必須）
+    web.window.navigator.serviceWorker.getRegistration().toDart.then((reg) {
+      if (reg != null) {
+        reg.showNotification(title, opts);
+      } else {
+        web.Notification(title, opts);
+      }
+    }).catchError((Object _) {
+      try {
+        web.Notification(title, opts);
+      } catch (_) {}
+      return null;
+    });
+  } catch (_) {
+    // 2) 直接生成（デスクトップブラウザ）
+    try {
       web.Notification(
         title,
         web.NotificationOptions(body: body, tag: 'identity-e-ticket'),
       );
-    }
-  } catch (_) {}
+    } catch (_) {}
+  }
 }
 
 /// ページタイトル点滅などの代替不要：バイブがあれば揺らす（スマホ）。

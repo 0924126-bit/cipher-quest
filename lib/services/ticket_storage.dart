@@ -10,6 +10,7 @@ class TicketStorage {
   static String? loadCache() => impl.loadTicketCache();
   static void storeCache(String json) => impl.storeTicketCache(json);
   static void requestNotifyPermission() => impl.requestNotifyPermission();
+  static String notifyPermission() => impl.notifyPermission();
   static void showNotification(String title, String body) =>
       impl.showNotification(title, body);
   static void vibrate() => impl.vibrate();
