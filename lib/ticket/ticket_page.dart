@@ -642,7 +642,9 @@ class _TicketPageState extends State<TicketPage> {
     );
   }
 
-  /// 通知未許可の警告バナー（緑の「通知をオンにする」ボタン付き）。
+  /// 通知未許可の案内カード。
+  /// Google風: 白地 + 薄いグレー枠、小さなアイコン、控えめな本文、
+  /// 右下に緑のテキストボタンだけを置くミニマルな構成。
   /// granted なら何も表示しない。denied（ブロック済み）は設定手順を案内。
   Widget _notifyBanner() {
     final perm = TicketStorage.notifyPermission();
@@ -652,42 +654,52 @@ class _TicketPageState extends State<TicketPage> {
     const green = Color(0xFF188038);
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 8, 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFFEF7E0),
-        border: Border.all(color: const Color(0xFFF9AB00)),
+        color: Colors.white,
+        border: Border.all(color: _line),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.notifications_off_outlined,
-                  size: 20, color: Color(0xFFB05A00)),
-              SizedBox(width: 8),
+              const Icon(Icons.notifications_none, size: 20, color: _sub),
+              const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  '通知がオンになっていません。このままでは通知がきません。',
-                  style: TextStyle(
-                      fontSize: 13.5,
-                      color: Color(0xFFB05A00),
-                      fontWeight: FontWeight.w600,
-                      height: 1.5),
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '通知がオフになっています',
+                        style: TextStyle(
+                            fontSize: 14,
+                            color: _ink,
+                            fontWeight: FontWeight.w500,
+                            height: 1.4),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        perm == 'denied'
+                            ? '通知がブロックされています。ブラウザの設定（サイトの設定 → 通知）から許可してください。'
+                            : '順番が近づいてもお知らせが届きません。',
+                        style: const TextStyle(
+                            fontSize: 12.5, color: _sub, height: 1.6),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          if (perm == 'denied')
-            const Text(
-              '通知がブロックされています。ブラウザの設定（サイトの許可 → 通知）から許可してください。',
-              style: TextStyle(fontSize: 12.5, color: _sub, height: 1.6),
-            )
-          else
+          if (perm != 'denied')
             Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
+              alignment: Alignment.centerRight,
+              child: TextButton(
                 style: TextButton.styleFrom(
                   foregroundColor: green,
                   padding: const EdgeInsets.symmetric(
@@ -703,13 +715,13 @@ class _TicketPageState extends State<TicketPage> {
                     if (mounted) setState(() {});
                   });
                 },
-                icon: const Icon(Icons.notifications_active_outlined,
-                    size: 18),
-                label: const Text('通知をオンにする',
+                child: const Text('通知をオンにする',
                     style: TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w700)),
+                        fontSize: 13.5, fontWeight: FontWeight.w600)),
               ),
-            ),
+            )
+          else
+            const SizedBox(height: 8),
         ],
       ),
     );
