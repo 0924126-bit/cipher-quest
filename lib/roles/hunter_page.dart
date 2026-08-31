@@ -32,6 +32,8 @@ class _HunterPageState extends State<HunterPage>
   StreamSubscription? _msgSub;
   StreamSubscription? _statusSub;
   Timer? _flashTimer;
+  Timer? _repeatTimer; // 呼び出し音を3秒間隔で繰り返す
+  int _repeatLeft = 0;
 
   late final AnimationController _pulse;
 
@@ -90,10 +92,7 @@ class _HunterPageState extends State<HunterPage>
             _flashUntilMs =
                 DateTime.now().millisecondsSinceEpoch + 4000;
           });
-          if (_soundArmed) {
-            AlarmService.instance.playCurseSting();
-          }
-          AlarmService.instance.vibrate();
+          _startAlertRepeat();
           _flashTimer?.cancel();
           _flashTimer = Timer(const Duration(seconds: 4), () {
             if (mounted) setState(() {});
@@ -105,6 +104,25 @@ class _HunterPageState extends State<HunterPage>
 
   bool get _flashing =>
       DateTime.now().millisecondsSinceEpoch < _flashUntilMs;
+
+  /// 呪い発動のアラート：即時鳴らしたあと、3秒間隔でさらに3回
+  /// （合計4回・約10秒）繰り返す。ポケット内でも気づけるように。
+  void _startAlertRepeat() {
+    if (_soundArmed) AlarmService.instance.playCurseSting();
+    AlarmService.instance.vibrate();
+    _repeatTimer?.cancel();
+    _repeatLeft = 3;
+    _repeatTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (!mounted || _repeatLeft <= 0) {
+        timer.cancel();
+        return;
+      }
+      _repeatLeft--;
+      if (_soundArmed) AlarmService.instance.playCurseSting();
+      AlarmService.instance.vibrate();
+      if (_repeatLeft <= 0) timer.cancel();
+    });
+  }
 
   /// ブラウザの自動再生制限を解除するため、最初に1タップさせる。
   /// 同じジェスチャで全画面化も行う。
@@ -120,6 +138,7 @@ class _HunterPageState extends State<HunterPage>
     _statusSub?.cancel();
     _socket?.dispose();
     _flashTimer?.cancel();
+    _repeatTimer?.cancel();
     _pulse.dispose();
     super.dispose();
   }
