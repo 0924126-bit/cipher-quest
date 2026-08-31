@@ -176,6 +176,7 @@ class TicketSettings {
   final int reserveSlotSec;
   final int reserveSlotCapacity;
   final List<ReserveWindow> reserveWindows;
+  final List<String> reserveAllowedEmails; // ドメイン外で予約を許可するメール
 
   const TicketSettings({
     this.gameSec = 180,
@@ -187,6 +188,7 @@ class TicketSettings {
     this.reserveSlotSec = 1800,
     this.reserveSlotCapacity = 5,
     this.reserveWindows = const [],
+    this.reserveAllowedEmails = const [],
   });
 
   factory TicketSettings.fromJson(Map<String, dynamic> json) => TicketSettings(
@@ -201,6 +203,10 @@ class TicketSettings {
             (json['reserve_slot_capacity'] as num?)?.toInt() ?? 5,
         reserveWindows: ((json['reserve_windows'] as List?) ?? const [])
             .map((e) => ReserveWindow.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        reserveAllowedEmails: ((json['reserve_allowed_emails'] as List?) ??
+                const [])
+            .map((e) => e.toString())
             .toList(),
       );
 }
