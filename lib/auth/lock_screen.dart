@@ -60,148 +60,184 @@ class _LockScreenState extends State<LockScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0, -0.4),
-            radius: 1.4,
-            colors: [_bgTop, _bgBottom],
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Full-screen logo backdrop
+          Image.asset(
+            'assets/images/identity_e_logo.png',
+            fit: BoxFit.cover,
+            filterQuality: FilterQuality.medium,
           ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 360),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: Image.asset(
-                        'assets/images/identity_e_logo.png',
-                        width: 104,
-                        height: 104,
-                        filterQuality: FilterQuality.medium,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'IDENTITY E',
-                      style: GoogleFonts.shipporiMincho(
-                        color: _ink,
-                        fontSize: 24,
-                        letterSpacing: 8,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '合言葉を入力してください',
-                      style: GoogleFonts.shipporiMincho(
-                        color: _inkDim,
-                        fontSize: 12.5,
-                        letterSpacing: 3,
-                      ),
-                    ),
-                    const SizedBox(height: 30),
-                    TextField(
-                      controller: _controller,
-                      focusNode: _focus,
-                      obscureText: _obscure,
-                      autofocus: true,
-                      enabled: !_busy,
-                      onSubmitted: (_) => _submit(),
-                      textInputAction: TextInputAction.go,
-                      style: const TextStyle(
-                        color: _ink,
-                        fontSize: 16,
-                        letterSpacing: 2,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'パスワード',
-                        hintStyle: TextStyle(
-                            color: _inkDim.withValues(alpha: 0.6)),
-                        filled: true,
-                        fillColor: Colors.white.withValues(alpha: 0.06),
-                        prefixIcon:
-                            const Icon(Icons.key_rounded, color: _inkDim),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscure
-                                ? Icons.visibility_off_rounded
-                                : Icons.visibility_rounded,
-                            color: _inkDim,
-                            size: 20,
-                          ),
-                          onPressed: () =>
-                              setState(() => _obscure = !_obscure),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(
-                              color: _inkDim.withValues(alpha: 0.35)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide:
-                              const BorderSide(color: _ink, width: 1.2),
-                        ),
-                        disabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(
-                              color: _inkDim.withValues(alpha: 0.2)),
+          // Dark scrim so the form stays readable
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: const Alignment(0, -0.4),
+                radius: 1.5,
+                colors: [
+                  _bgTop.withValues(alpha: 0.72),
+                  _bgBottom.withValues(alpha: 0.94),
+                ],
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 360),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: Image.asset(
+                          'assets/images/identity_e_logo.png',
+                          width: 104,
+                          height: 104,
+                          filterQuality: FilterQuality.medium,
                         ),
                       ),
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 18),
                       Text(
-                        _error!,
-                        style: const TextStyle(
-                          color: Color(0xFFE08A80),
-                          fontSize: 12.5,
+                        'IDENTITY E',
+                        style: GoogleFonts.shipporiMincho(
+                          color: _ink,
+                          fontSize: 24,
+                          letterSpacing: 8,
+                          fontWeight: FontWeight.w600,
                         ),
-                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '合言葉を入力してください',
+                        style: GoogleFonts.shipporiMincho(
+                          color: _inkDim,
+                          fontSize: 12.5,
+                          letterSpacing: 3,
+                        ),
+                      ),
+                      const SizedBox(height: 30),
+                      TextField(
+                        controller: _controller,
+                        focusNode: _focus,
+                        obscureText: _obscure,
+                        autofocus: true,
+                        enabled: !_busy,
+                        onSubmitted: (_) => _submit(),
+                        textInputAction: TextInputAction.go,
+                        style: const TextStyle(
+                          color: _ink,
+                          fontSize: 16,
+                          letterSpacing: 2,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'パスワード',
+                          hintStyle: TextStyle(
+                              color: _inkDim.withValues(alpha: 0.6)),
+                          filled: true,
+                          fillColor: Colors.white.withValues(alpha: 0.06),
+                          prefixIcon:
+                              const Icon(Icons.key_rounded, color: _inkDim),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscure
+                                  ? Icons.visibility_off_rounded
+                                  : Icons.visibility_rounded,
+                              color: _inkDim,
+                              size: 20,
+                            ),
+                            onPressed: () =>
+                                setState(() => _obscure = !_obscure),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(
+                                color: _inkDim.withValues(alpha: 0.35)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide:
+                                const BorderSide(color: _ink, width: 1.2),
+                          ),
+                          disabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(
+                                color: _inkDim.withValues(alpha: 0.2)),
+                          ),
+                        ),
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          _error!,
+                          style: const TextStyle(
+                            color: Color(0xFFE08A80),
+                            fontSize: 12.5,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: _busy ? null : _submit,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _ink,
+                            foregroundColor: _bgBottom,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: _busy
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2.2),
+                                )
+                              : Text(
+                                  '入場する',
+                                  style: GoogleFonts.shipporiMincho(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 4,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 26),
+                      // Visitors with a queue-ticket code don't need the
+                      // site password: send them to the ticket page.
+                      TextButton.icon(
+                        onPressed: () =>
+                            Navigator.of(context).pushNamed('/ticket'),
+                        icon: const Icon(
+                          Icons.confirmation_number_outlined,
+                          size: 18,
+                          color: _inkDim,
+                        ),
+                        label: Text(
+                          '整理券をお持ちの方はこちら',
+                          style: GoogleFonts.shipporiMincho(
+                            color: _inkDim,
+                            fontSize: 13,
+                            letterSpacing: 2,
+                          ),
+                        ),
                       ),
                     ],
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: _busy ? null : _submit,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _ink,
-                          foregroundColor: _bgBottom,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        child: _busy
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2.2),
-                              )
-                            : Text(
-                                '入場する',
-                                style: GoogleFonts.shipporiMincho(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 4,
-                                ),
-                              ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
