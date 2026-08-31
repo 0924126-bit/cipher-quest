@@ -12,3 +12,10 @@ void gotoHashRoute(String route) {
   web.window.location.hash = route;
   web.window.location.reload();
 }
+
+/// Navigates the current tab to [url] (full page navigation).
+/// Used for the Google OAuth start endpoint, which must redirect
+/// the same tab through accounts.google.com and back.
+void gotoUrl(String url) {
+  web.window.location.href = url;
+}
