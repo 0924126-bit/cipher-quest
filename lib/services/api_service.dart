@@ -663,6 +663,34 @@ class ApiService {
     return res.statusCode == 200;
   }
 
+  // ==================================================================
+  // Web Push（タブを閉じていても・iOSタスクキル中でも届く通知）
+  // ==================================================================
+
+  /// VAPID公開鍵（購読作成に必要。空なら未設定）。
+  Future<String> pushVapidKey() async {
+    final res = await http.get(_u('/api/push/vapid'));
+    if (res.statusCode != 200) return '';
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    return (data['key'] as String?) ?? '';
+  }
+
+  /// Push購読をサーバーに保存（整理券コードに紐づく）。
+  Future<bool> pushSubscribe(
+      String code, Map<String, String> sub) async {
+    final res = await http.post(
+      _u('/api/ticket/push/subscribe'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'code': code,
+        'endpoint': sub['endpoint'],
+        'p256dh': sub['p256dh'],
+        'auth': sub['auth'],
+      }),
+    );
+    return res.statusCode == 200;
+  }
+
   /// 公開口コミ一覧（認証不要）。
   Future<(bool, List<Review>)> listReviews() async {
     final res = await http.get(_u('/api/reviews'));

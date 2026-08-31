@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 
 import '../models/ticket.dart';
 import '../services/api_service.dart';
+import '../services/push_service_stub.dart'
+    if (dart.library.js_interop) '../services/push_service_web.dart'
+    as push;
 import '../services/socket_service.dart';
 import '../services/ticket_storage.dart';
 import '../services/url_open.dart'
@@ -84,9 +87,29 @@ class _TicketPageState extends State<TicketPage> {
       _refresh();
       _connectSocket();
       _startPoll();
+      _ensurePushSubscription();
     } else {
       _handleOAuthReturn();
     }
+  }
+
+  /// Web Push 購読（許可済みならサイレントに作成・サーバーに保存）。
+  /// これによりタブを閉じていても・iOSでタスクキルしていても
+  /// 呼び出し・リマインダー・運営チャットの通知が届く。
+  Future<void> _ensurePushSubscription() async {
+    final code = _code;
+    if (code == null) return;
+    if (TicketStorage.notifyPermission() != 'granted') return;
+    try {
+      final key = await ApiService.instance.pushVapidKey();
+      if (key.isEmpty) return;
+      final sub = await push.createPushSubscription(key);
+      if (sub == null) return;
+      // 既に同じendpointを保存済みなら再送不要
+      if (push.savedPushEndpoint() == sub['endpoint']) return;
+      final ok = await ApiService.instance.pushSubscribe(code, sub);
+      if (ok) push.storePushEndpoint(sub['endpoint']);
+    } catch (_) {}
   }
 
   /// OAuth callback（/?rs=..&remail=..#/ticket または ?rerr=..）の処理。
@@ -164,6 +187,7 @@ class _TicketPageState extends State<TicketPage> {
       _cache(t);
       _connectSocket();
       _startPoll();
+      _ensurePushSubscription();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -253,6 +277,7 @@ class _TicketPageState extends State<TicketPage> {
       _cache(t);
       _connectSocket();
       _startPoll();
+      _ensurePushSubscription();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -707,12 +732,17 @@ class _TicketPageState extends State<TicketPage> {
                 ),
                 onPressed: () {
                   TicketStorage.requestNotifyPermission();
-                  // 許可ダイアログの結果を反映（少し待って再描画）
+                  // 許可ダイアログの結果を反映（少し待って再描画）。
+                  // 許可されたらWeb Push購読も作成（タスキルでも届く）。
                   Future.delayed(const Duration(seconds: 2), () {
-                    if (mounted) setState(() {});
+                    if (!mounted) return;
+                    setState(() {});
+                    _ensurePushSubscription();
                   });
                   Future.delayed(const Duration(seconds: 6), () {
-                    if (mounted) setState(() {});
+                    if (!mounted) return;
+                    setState(() {});
+                    _ensurePushSubscription();
                   });
                 },
                 child: const Text('通知をオンにする',
