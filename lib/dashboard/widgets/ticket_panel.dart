@@ -31,9 +31,54 @@ class _TicketPanelState extends State<TicketPanel> {
   // ------------------------------------------------------------------
 
   Future<void> _issueOnline() async {
+    final codeCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('オンライン整理券を発行'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'コードを自由に決められます（英数4〜12文字）。空欄のまま発行すると自動生成されます。',
+              style: TextStyle(fontSize: 12.5, color: AppColors.dashGrey),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: codeCtrl,
+              autofocus: true,
+              maxLength: 12,
+              textCapitalization: TextCapitalization.characters,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+              ],
+              decoration: const InputDecoration(
+                labelText: 'コード（任意・未入力で自動生成）',
+                counterText: '',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('キャンセル',
+                style: TextStyle(color: AppColors.dashGrey)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('発行'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
     setState(() => _busy = true);
     try {
-      final t = await ctrl.issueTicket(kind: 'online');
+      final t = await ctrl.issueTicket(
+          kind: 'online', code: codeCtrl.text.trim().toUpperCase());
       if (!mounted) return;
       await _showCodeDialog(t);
     } catch (e) {
@@ -403,8 +448,159 @@ class _TicketPanelState extends State<TicketPanel> {
             color: s.reviewsEnabled ? AppColors.dashBlue : AppColors.dashGrey,
           ),
         ),
+        // ---- 予約設定 ----
+        FilterChip(
+          selected: s.reserveEnabled,
+          onSelected: (v) => ctrl.updateTicketSettings(reserveEnabled: v),
+          label: Text(
+            s.reserveEnabled ? '予約 受付中' : '予約 停止中',
+            style: const TextStyle(fontSize: 12.5),
+          ),
+          avatar: Icon(
+            s.reserveEnabled ? Icons.event_available : Icons.event_busy,
+            size: 16,
+            color: s.reserveEnabled ? AppColors.dashBlue : AppColors.dashGrey,
+          ),
+        ),
+        chip('予約スロット長', mmss(s.reserveSlotSec), () {
+          _editNumber('予約スロットの長さ（分）', s.reserveSlotSec ~/ 60,
+              (v) => ctrl.updateTicketSettings(reserveSlotSec: v * 60));
+        }),
+        chip('スロットあたり組数', '${s.reserveSlotCapacity}組', () {
+          _editNumber('1スロットあたりの組数', s.reserveSlotCapacity,
+              (v) => ctrl.updateTicketSettings(reserveSlotCapacity: v));
+        }),
+        chip('予約可能日時', '${s.reserveWindows.length}件', _editWindows),
+        ActionChip(
+          onPressed: () => Navigator.of(context).pushNamed('/desk'),
+          avatar: const Icon(Icons.point_of_sale,
+              size: 16, color: AppColors.dashBlue),
+          label: const Text('受付デスクを開く',
+              style: TextStyle(fontSize: 12.5, color: AppColors.dashBlue)),
+        ),
       ],
     );
+  }
+
+  // ---- 予約可能日時ウィンドウの編集 ----
+  Future<void> _editWindows() async {
+    final windows = List<ReserveWindow>.from(ctrl.ticketSettings.reserveWindows);
+    final changed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setD) {
+          Future<void> addWindow() async {
+            final now = DateTime.now();
+            final date = await showDatePicker(
+              context: context,
+              initialDate: now,
+              firstDate: now.subtract(const Duration(days: 1)),
+              lastDate: now.add(const Duration(days: 365)),
+            );
+            if (date == null || !context.mounted) return;
+            final start = await showTimePicker(
+              context: context,
+              initialTime: const TimeOfDay(hour: 10, minute: 0),
+              helpText: '開始時刻',
+            );
+            if (start == null || !context.mounted) return;
+            final end = await showTimePicker(
+              context: context,
+              initialTime: const TimeOfDay(hour: 15, minute: 0),
+              helpText: '終了時刻',
+            );
+            if (end == null) return;
+            if (end.hour * 60 + end.minute <= start.hour * 60 + start.minute) {
+              return;
+            }
+            String two(int v) => v.toString().padLeft(2, '0');
+            setD(() => windows.add(ReserveWindow(
+                  date:
+                      '${date.year}-${two(date.month)}-${two(date.day)}',
+                  start: '${two(start.hour)}:${two(start.minute)}',
+                  end: '${two(end.hour)}:${two(end.minute)}',
+                )));
+          }
+
+          return AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text('予約可能な日時'),
+            content: SizedBox(
+              width: 380,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'ここで追加した日時の範囲内だけ、来場者が /reserve から予約できます。'
+                    'スロットは設定の長さで自動分割されます。',
+                    style:
+                        TextStyle(fontSize: 12, color: AppColors.dashGrey),
+                  ),
+                  const SizedBox(height: 12),
+                  if (windows.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Text('まだありません。「日時を追加」から登録してください。',
+                          style: TextStyle(
+                              fontSize: 13, color: AppColors.dashGrey)),
+                    )
+                  else
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 260),
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (var i = 0; i < windows.length; i++)
+                            ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.event,
+                                  size: 18, color: AppColors.dashBlue),
+                              title: Text(
+                                  '${windows[i].date}  ${windows[i].start}〜${windows[i].end}',
+                                  style: const TextStyle(fontSize: 13.5)),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline,
+                                    size: 18, color: AppColors.dashRed),
+                                onPressed: () =>
+                                    setD(() => windows.removeAt(i)),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: addWindow,
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('日時を追加'),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('キャンセル',
+                    style: TextStyle(color: AppColors.dashGrey)),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('保存'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (changed != true) return;
+    try {
+      await ctrl.updateTicketSettings(reserveWindows: windows);
+    } catch (e) {
+      _snackErr('保存に失敗: ${_msg(e)}');
+    }
   }
 
   Future<void> _editNumber(
