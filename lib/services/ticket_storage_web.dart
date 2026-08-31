@@ -11,6 +11,8 @@ import 'package:web/web.dart' as web;
 
 const _codeKey = 'ie_ticket_code';
 const _cacheKey = 'ie_ticket_cache';
+const _rsSessKey = 'ie_reserve_session';
+const _rsEmailKey = 'ie_reserve_email';
 
 String? loadTicketCode() {
   try {
@@ -43,6 +45,46 @@ String? loadTicketCache() {
 void storeTicketCache(String json) {
   try {
     web.window.localStorage.setItem(_cacheKey, json);
+  } catch (_) {}
+}
+
+/// 予約用Googleログインのセッション（Workersが発行、3時間有効）。
+String? loadReserveSession() {
+  try {
+    final v = web.window.localStorage.getItem(_rsSessKey);
+    return (v == null || v.isEmpty) ? null : v;
+  } catch (_) {
+    return null;
+  }
+}
+
+void storeReserveSession(String? session) {
+  try {
+    if (session == null || session.isEmpty) {
+      web.window.localStorage.removeItem(_rsSessKey);
+    } else {
+      web.window.localStorage.setItem(_rsSessKey, session);
+    }
+  } catch (_) {}
+}
+
+/// ログイン中のメールアドレス（表示用。サーバー側が正）。
+String? loadReserveEmail() {
+  try {
+    final v = web.window.localStorage.getItem(_rsEmailKey);
+    return (v == null || v.isEmpty) ? null : v;
+  } catch (_) {
+    return null;
+  }
+}
+
+void storeReserveEmail(String? email) {
+  try {
+    if (email == null || email.isEmpty) {
+      web.window.localStorage.removeItem(_rsEmailKey);
+    } else {
+      web.window.localStorage.setItem(_rsEmailKey, email);
+    }
   } catch (_) {}
 }
 
