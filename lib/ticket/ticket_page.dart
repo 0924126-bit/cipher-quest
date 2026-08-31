@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../models/ticket.dart';
 import '../services/api_service.dart';
+import '../services/socket_service.dart';
 import '../services/ticket_storage.dart';
 
 /// 来場者向けオンライン整理券ページ（/#/ticket）。
@@ -12,8 +13,9 @@ import '../services/ticket_storage.dart';
 /// デザイン方針: Google的ミニマリズム。白背景・十分な余白・
 /// 細いタイポグラフィ・アクセント1色（青）。装飾なし。
 ///
-/// 負荷設計: コード・券面はlocalStorageに保存し、表示は即時
-/// キャッシュから。サーバー同期は30秒ポーリング1リクエストのみ。
+/// リアルタイム: WebSocket（/ws/ticket?code=…）で即時pushを受信。
+/// コード・券面はlocalStorageに保存し表示は即時キャッシュから。
+/// WS切断中の保険として60秒ポーリングも維持する。
 /// 通知（呼出/開始間近/チャット）はブラウザ通知＋バイブ。
 class TicketPage extends StatefulWidget {
   const TicketPage({super.key});
@@ -33,6 +35,8 @@ class _TicketPageState extends State<TicketPage> {
   bool _loading = false;
   String? _error;
   Timer? _poll;
+  SocketService? _socket;
+  StreamSubscription? _socketSub;
 
   // 通知の重複防止
   String _lastNotifiedStatus = '';
@@ -57,6 +61,7 @@ class _TicketPageState extends State<TicketPage> {
     }
     if (_code != null) {
       _refresh();
+      _connectSocket();
       _startPoll();
     }
   }
@@ -64,15 +69,49 @@ class _TicketPageState extends State<TicketPage> {
   @override
   void dispose() {
     _poll?.cancel();
+    _disconnectSocket();
     _codeCtrl.dispose();
     _chatCtrl.dispose();
     _chatScroll.dispose();
     super.dispose();
   }
 
+  /// WSが主役。ポーリングは切断時の保険（60秒）。
   void _startPoll() {
     _poll?.cancel();
-    _poll = Timer.periodic(const Duration(seconds: 30), (_) => _refresh());
+    _poll = Timer.periodic(const Duration(seconds: 60), (_) {
+      if (_socket?.isConnected != true) _refresh();
+    });
+  }
+
+  /// 整理券コード認証の専用WebSocket。呼出・チャットが即時届く。
+  void _connectSocket() {
+    final code = _code;
+    if (code == null) return;
+    _disconnectSocket();
+    final s = SocketService(
+      '/ws/ticket',
+      autoReconnect: true,
+      queryOverride: 'code=${Uri.encodeComponent(code)}',
+    );
+    _socketSub = s.messages.listen((msg) {
+      if (!mounted) return;
+      if (msg['type'] == 'ticket' && msg['ticket'] is Map<String, dynamic>) {
+        final t = Ticket.fromJson(msg['ticket'] as Map<String, dynamic>);
+        _maybeNotify(t);
+        setState(() => _ticket = t);
+        _cache(t);
+      }
+    });
+    s.connect();
+    _socket = s;
+  }
+
+  void _disconnectSocket() {
+    _socketSub?.cancel();
+    _socketSub = null;
+    _socket?.dispose();
+    _socket = null;
   }
 
   Future<void> _login() async {
@@ -102,6 +141,7 @@ class _TicketPageState extends State<TicketPage> {
         _lastChatCount = t.chat.length;
       });
       _cache(t);
+      _connectSocket();
       _startPoll();
     } catch (e) {
       if (!mounted) return;
@@ -265,6 +305,7 @@ class _TicketPageState extends State<TicketPage> {
   void _logout() {
     TicketStorage.storeCode(null);
     _poll?.cancel();
+    _disconnectSocket();
     setState(() {
       _code = null;
       _ticket = null;
