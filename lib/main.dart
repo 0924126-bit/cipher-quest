@@ -13,6 +13,8 @@ import 'services/alarm_service.dart';
 import 'services/auth_service.dart';
 import 'services/pwa_service.dart';
 import 'theme/app_theme.dart';
+import 'desk/desk_page.dart';
+import 'reserve/reserve_page.dart';
 import 'ticket/kutikomi_page.dart';
 import 'ticket/ticket_page.dart';
 import 'ytdl/ytdl_page.dart';
@@ -38,6 +40,9 @@ void main() {
 /// the site password; the ticket code itself is the credential):
 ///   /ticket        -> visitor queue-ticket page
 ///   /kutikomi      -> public read-only reviews page
+///   /reserve       -> public reservation page
+/// STAFF routes (behind the gate):
+///   /desk          -> staff reception desk (big-button queue control)
 ///
 /// PWA (installed app) mode is a role-only terminal: dashboard, decoder
 /// and game routes are blocked and redirect to the role selector.
@@ -61,7 +66,7 @@ class _IdentityEAppState extends State<IdentityEApp> {
     final route =
         WidgetsBinding.instance.platformDispatcher.defaultRouteName;
     final path = Uri.parse(route).path;
-    return path == '/ticket' || path == '/kutikomi';
+    return path == '/ticket' || path == '/kutikomi' || path == '/reserve';
   }();
 
   @override
@@ -126,6 +131,8 @@ class _IdentityEAppState extends State<IdentityEApp> {
               return fade(const TicketPage());
             case 'kutikomi':
               return fade(const KutikomiPage());
+            case 'reserve':
+              return fade(const ReservePage());
           }
         }
 
@@ -169,6 +176,8 @@ class _IdentityEAppState extends State<IdentityEApp> {
               return fade(const PasskeyPage());
             case 'ytdl':
               return fade(const YtdlPage());
+            case 'desk':
+              return fade(const DeskPage());
           }
         }
 
