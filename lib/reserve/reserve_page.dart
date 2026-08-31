@@ -658,6 +658,10 @@ class _ReservePageState extends State<ReservePage> {
               ),
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              helperText: 'ニックネームは後から変更できません。口コミ投稿時の表示名にもなります。',
+              helperStyle: const TextStyle(
+                  fontSize: 11.5, color: _sub, height: 1.5),
+              helperMaxLines: 2,
             ),
             style: const TextStyle(fontSize: 14, color: _ink),
           ),
