@@ -93,6 +93,14 @@ class _TimerPageState extends State<TimerPage>
             data.roleMap['timer_key'] ?? '/audio/timer_key.mp3',
       });
       SoundService.instance.updateKeySounds(data.keyMap);
+      SoundService.instance.updateFx({
+        for (final e in data.fxMap.entries)
+          e.key: {
+            'volume': e.value.volume,
+            'distortion': e.value.distortion,
+            'rate': e.value.rate,
+          },
+      });
     } catch (_) {
       // 未認証時はビルド内蔵のデフォルト音を使う
       SoundService.instance.updateSources(const {

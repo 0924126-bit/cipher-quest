@@ -74,6 +74,7 @@ class DecoderController extends ChangeNotifier {
         phase = DecoderPhase.ready;
         SoundService.instance
             .updateSources(msg['sounds'] as Map<String, dynamic>?);
+        SoundService.instance.updateFx(msg['fx'] as Map<String, dynamic>?);
         _startTicker();
         notifyListeners();
         break;
@@ -83,9 +84,10 @@ class DecoderController extends ChangeNotifier {
         notifyListeners();
         break;
       case 'sounds':
-        // operator changed sound assignments
+        // operator changed sound assignments / live FX
         SoundService.instance
             .updateSources(msg['roles'] as Map<String, dynamic>?);
+        SoundService.instance.updateFx(msg['fx'] as Map<String, dynamic>?);
         notifyListeners();
         break;
       case 'reset':
