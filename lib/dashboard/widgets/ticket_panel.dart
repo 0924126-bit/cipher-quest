@@ -91,46 +91,114 @@ class _TicketPanelState extends State<TicketPanel> {
 
   Future<void> _issuePaper() async {
     final labelCtrl = TextEditingController();
+    final placeCtrl = TextEditingController();
+    DateTime? slotAt;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('紙の整理券を登録'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '紙で配った整理券をこの待ち行列に組み込みます。オンライン券と同じ列で番号順に管理され、二重予約（オーバーブッキング）を防げます。',
-              style: TextStyle(fontSize: 12.5, color: AppColors.dashGrey),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDlg) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('紙の整理券を登録'),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '紙で配った整理券をこの待ち行列に組み込みます。オンライン券と同じ列で番号順に管理され、二重予約（オーバーブッキング）を防げます。',
+                  style: TextStyle(fontSize: 12.5, color: AppColors.dashGrey),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: labelCtrl,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'メモ（紙券の番号や名前など・任意）',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: placeCtrl,
+                  decoration: const InputDecoration(
+                    labelText: '集合場所（任意・例: 3年2組前 受付）',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // 集合日時（任意）: 設定すると15分前/5分前の自動リマインダー対象
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        slotAt == null
+                            ? '集合日時: 未設定（先着順）'
+                            : '集合日時: ${slotAt!.month}/${slotAt!.day} '
+                                '${slotAt!.hour}:${slotAt!.minute.toString().padLeft(2, '0')}',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        final now = DateTime.now();
+                        final d = await showDatePicker(
+                          context: context,
+                          initialDate: slotAt ?? now,
+                          firstDate: now.subtract(const Duration(days: 1)),
+                          lastDate: now.add(const Duration(days: 60)),
+                        );
+                        if (d == null || !context.mounted) return;
+                        final t = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.fromDateTime(slotAt ?? now),
+                        );
+                        if (t == null) return;
+                        setDlg(() => slotAt = DateTime(
+                            d.year, d.month, d.day, t.hour, t.minute));
+                      },
+                      child: const Text('選択'),
+                    ),
+                    if (slotAt != null)
+                      IconButton(
+                        tooltip: 'クリア',
+                        icon: const Icon(Icons.close, size: 16),
+                        onPressed: () => setDlg(() => slotAt = null),
+                      ),
+                  ],
+                ),
+                if (slotAt != null)
+                  const Text(
+                    '設定した日時の15分前・5分前に自動通知されます（オンライン閲覧者のみ）',
+                    style:
+                        TextStyle(fontSize: 11.5, color: AppColors.dashGrey),
+                  ),
+              ],
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: labelCtrl,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'メモ（紙券の番号や名前など・任意）',
-              ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('キャンセル',
+                  style: TextStyle(color: AppColors.dashGrey)),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('登録'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('キャンセル',
-                style: TextStyle(color: AppColors.dashGrey)),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('登録'),
-          ),
-        ],
       ),
     );
     if (ok != true || !mounted) return;
     setState(() => _busy = true);
     try {
-      await ctrl.issueTicket(kind: 'paper', label: labelCtrl.text.trim());
+      await ctrl.issueTicket(
+        kind: 'paper',
+        label: labelCtrl.text.trim(),
+        reservedSlot:
+            slotAt == null ? 0 : slotAt!.millisecondsSinceEpoch ~/ 1000,
+        place: placeCtrl.text.trim(),
+      );
     } catch (e) {
       _snackErr('登録に失敗: ${_msg(e)}');
     } finally {
@@ -1080,7 +1148,8 @@ class _TicketRow extends StatelessWidget {
                   t.reservedEmail.isEmpty ? '—（未使用）' : t.reservedEmail,
                   selectable: t.reservedEmail.isNotEmpty,
                 ),
-                row('予約枚', slotLabel),
+                row('予約枠・集合日時', slotLabel),
+                if (t.place.isNotEmpty) row('集合場所', t.place),
                 const Divider(height: 20),
                 row('発行', when(t.createdAt)),
                 row('呼出', when(t.calledAt)),

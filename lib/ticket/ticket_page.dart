@@ -730,6 +730,13 @@ class _TicketPageState extends State<TicketPage> {
     if (t.status == 'waiting') {
       final mins = (t.etaSec / 60).ceil();
       return [
+        if (t.reservedSlot > 0)
+          _kv('集合日時', () {
+            final d =
+                DateTime.fromMillisecondsSinceEpoch(t.reservedSlot * 1000);
+            return '${d.month}/${d.day} ${d.hour}:${d.minute.toString().padLeft(2, '0')}';
+          }()),
+        if (t.place.isNotEmpty) _kv('集合場所', t.place),
         _kv('あなたの前', t.position <= 0 ? 'なし（次です）' : '${t.position} 組'),
         _kv('開始予想', mins <= 1 ? 'まもなく' : '約 $mins 分後'),
         const SizedBox(height: 8),
