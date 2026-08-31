@@ -14,6 +14,7 @@ import 'services/auth_service.dart';
 import 'services/pwa_service.dart';
 import 'theme/app_theme.dart';
 import 'desk/desk_page.dart';
+import 'home/home_page.dart';
 import 'reserve/reserve_page.dart';
 import 'ticket/kutikomi_page.dart';
 import 'ticket/ticket_page.dart';
@@ -27,7 +28,7 @@ void main() {
 }
 
 /// Routes (all behind the site-wide password gate):
-///   /              -> operator dashboard (browser) / role select (PWA)
+///   /dashboard     -> operator dashboard (browser) / role select (PWA)
 ///   /machine/:id   -> decoder page (full-screen)
 ///   /role          -> role select home (PWA start page)
 ///   /chaser        -> chaser alarm page (security buzzer)
@@ -38,6 +39,7 @@ void main() {
 ///
 /// PUBLIC routes (NOT behind the password gate — visitors don't have
 /// the site password; the ticket code itself is the credential):
+///   /              -> public landing (予約/整理券; logo 10-tap -> /dashboard)
 ///   /ticket        -> visitor queue-ticket page
 ///   /kutikomi      -> public read-only reviews page
 ///   /reserve       -> public reservation page
@@ -66,7 +68,11 @@ class _IdentityEAppState extends State<IdentityEApp> {
     final route =
         WidgetsBinding.instance.platformDispatcher.defaultRouteName;
     final path = Uri.parse(route).path;
-    return path == '/ticket' || path == '/kutikomi' || path == '/reserve';
+    // '/' は公開トップ。スタッフはロゴ10連打 → /dashboard でゲートへ。
+    return path == '/' ||
+        path == '/ticket' ||
+        path == '/kutikomi' ||
+        path == '/reserve';
   }();
 
   @override
@@ -125,6 +131,9 @@ class _IdentityEAppState extends State<IdentityEApp> {
             );
 
         // ---- Public visitor routes (no site password) ----
+        if (!pwa && (name == '/' || segs.isEmpty)) {
+          return fade(const HomePage());
+        }
         if (segs.length == 1) {
           switch (segs[0]) {
             case 'ticket':
