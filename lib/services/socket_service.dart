@@ -24,15 +24,20 @@ class SocketService {
   bool _connected = false;
   bool get isConnected => _connected;
 
-  SocketService(this.path, {this.autoReconnect = false});
+  /// When set, used verbatim as the query string instead of `token=`
+  /// (e.g. `code=ABCD1234` for the visitor ticket socket).
+  final String? queryOverride;
+
+  SocketService(this.path, {this.autoReconnect = false, this.queryOverride});
 
   String get _wsUrl {
     final base = Uri.base;
     final scheme = base.scheme == 'https' ? 'wss' : 'ws';
     // site-wide auth: server verifies this token at handshake time
-    final token = Uri.encodeComponent(AuthService.instance.wsToken);
+    final query = queryOverride ??
+        'token=${Uri.encodeComponent(AuthService.instance.wsToken)}';
     return '$scheme://${base.host}${base.hasPort ? ':${base.port}' : ''}'
-        '$path?token=$token';
+        '$path?$query';
   }
 
   void connect() {
