@@ -6,13 +6,19 @@ import '../services/api_service.dart';
 import '../services/ticket_storage.dart';
 import '../services/url_open.dart';
 
-/// 来場者向け予約ページ（/#/reserve）。認証不要・公開。
+/// 来場者向け予約ページ（/#/reserve）。サイトパスワード不要・公開。
+/// ただし予約確定には Google ログイン必須
+/// （gse.okayama-c.ed.jp ドメイン or スタッフ指定メールのみ）。
+///
+/// OAuth フロー: [Googleでログイン] → /api/reserve/google/start → Google
+/// → callback → `/?rs=SESSION&remail=EMAIL#/reserve`（失敗時 `?rerr=..`）。
+/// クエリはハッシュより前なので Uri.base.queryParameters で読む。
 ///
 /// デザイン方針: Google的ミニマリズム。白背景・十分な余白・
 /// 細いタイポグラフィ・アクセント1色（青）。
 ///
-/// フロー: 日付を選ぶ → 30分毎の時間スロットを選ぶ →（任意で名前）
-/// → 予約確定 → 整理券コードを表示（そのまま /ticket へ）。
+/// フロー: Googleログイン → 日付を選ぶ → 30分毎の時間スロットを選ぶ
+/// →（任意で名前）→ 予約確定 → 整理券コードを表示（そのまま /ticket へ）。
 class ReservePage extends StatefulWidget {
   const ReservePage({super.key});
 
@@ -31,6 +37,12 @@ class _ReservePageState extends State<ReservePage> {
   bool _loading = true;
   bool _enabled = true;
   String? _error;
+
+  // Googleログイン（予約に必須）
+  String? _session; // Workers発行のセッションtoken（3時間）
+  String? _email; // ログイン中のメール（表示用）
+  String? _authNotice; // ログインエラーメッセージ
+  bool _authChecking = true; // 保存セッションの検証中
   List<ReserveSlot> _slots = const [];
   String? _selectedDate; // "M月d日(曜)" key
   ReserveSlot? _selected;
@@ -45,7 +57,80 @@ class _ReservePageState extends State<ReservePage> {
   @override
   void initState() {
     super.initState();
+    _initAuth();
     _load();
+  }
+
+  /// OAuth callback のクエリ（rs/remail/rerr）→ 保存セッションの順で復元。
+  Future<void> _initAuth() async {
+    final qp = Uri.base.queryParameters;
+    final rs = qp['rs'] ?? '';
+    final remail = qp['remail'] ?? '';
+    final rerr = qp['rerr'] ?? '';
+    if (rs.isNotEmpty) {
+      // ログイン成功で戻ってきた。tokenはURLから即消す。
+      TicketStorage.storeReserveSession(rs);
+      TicketStorage.storeReserveEmail(remail.isEmpty ? null : remail);
+      clearUrlQuery();
+      if (!mounted) return;
+      setState(() {
+        _session = rs;
+        _email = remail.isEmpty ? null : remail;
+        _authChecking = false;
+      });
+      return;
+    }
+    if (rerr.isNotEmpty) {
+      clearUrlQuery();
+      if (!mounted) return;
+      setState(() {
+        _authChecking = false;
+        _authNotice = switch (rerr) {
+          'forbidden' => remail.isNotEmpty
+              ? 'このアカウント（$remail）では予約できません。\n'
+                  'gse.okayama-c.ed.jp のGoogleアカウントでログインしてください。'
+              : 'このアカウントでは予約できません。\n'
+                  'gse.okayama-c.ed.jp のGoogleアカウントでログインしてください。',
+          'denied' => 'ログインがキャンセルされました。',
+          _ => 'ログインに失敗しました。もう一度お試しください。',
+        };
+      });
+      return;
+    }
+    // 保存済みセッションがあればサーバーで検証（期限切れは破棄）。
+    final stored = TicketStorage.loadReserveSession();
+    if (stored == null || stored.isEmpty) {
+      if (mounted) setState(() => _authChecking = false);
+      return;
+    }
+    final email = await ApiService.instance.reserveMe(stored);
+    if (!mounted) return;
+    if (email == null) {
+      TicketStorage.storeReserveSession(null);
+      TicketStorage.storeReserveEmail(null);
+      setState(() => _authChecking = false);
+      return;
+    }
+    TicketStorage.storeReserveEmail(email);
+    setState(() {
+      _session = stored;
+      _email = email;
+      _authChecking = false;
+    });
+  }
+
+  void _startLogin() {
+    gotoUrl('${Uri.base.origin}/api/reserve/google/start');
+  }
+
+  void _logout() {
+    TicketStorage.storeReserveSession(null);
+    TicketStorage.storeReserveEmail(null);
+    setState(() {
+      _session = null;
+      _email = null;
+      _authNotice = null;
+    });
   }
 
   @override
@@ -100,11 +185,17 @@ class _ReservePageState extends State<ReservePage> {
 
   Future<void> _submit() async {
     final slot = _selected;
+    final session = _session;
     if (slot == null || _submitting) return;
+    if (session == null || session.isEmpty) {
+      // 保险（UI上はログイン済みでないとここに来ない）
+      setState(() => _authNotice = '予約にはGoogleログインが必要です。');
+      return;
+    }
     setState(() => _submitting = true);
     try {
       final (code, ticket) = await ApiService.instance
-          .reserveCreate(slot.start, _nameCtrl.text.trim());
+          .reserveCreate(slot.start, _nameCtrl.text.trim(), session);
       if (!mounted) return;
       // そのまま /ticket で使えるようコードを保存しておく
       TicketStorage.storeCode(code);
@@ -115,8 +206,19 @@ class _ReservePageState extends State<ReservePage> {
       });
     } catch (e) {
       if (!mounted) return;
+      var msg = e.toString().replaceFirst('Exception: ', '');
+      if (msg.startsWith('AUTH:')) {
+        // セッション切れ・許可外 → セッション破棄して再ログイン誘導
+        msg = msg.substring(5);
+        TicketStorage.storeReserveSession(null);
+        setState(() {
+          _submitting = false;
+          _session = null;
+          _authNotice = '$msg\nもう一度ログインしてください。';
+        });
+        return;
+      }
       setState(() => _submitting = false);
-      final msg = e.toString().replaceFirst('Exception: ', '');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(msg), backgroundColor: _red),
       );
@@ -258,7 +360,7 @@ class _ReservePageState extends State<ReservePage> {
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 15, color: _sub)),
         const SizedBox(height: 32),
-        if (_loading)
+        if (_loading || _authChecking)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 60),
             child: Center(
@@ -269,9 +371,13 @@ class _ReservePageState extends State<ReservePage> {
           _message(Icons.wifi_off, _error!, retry: true)
         else if (!_enabled)
           _message(Icons.event_busy, '予約は現在受け付けていません')
+        else if (_session == null)
+          _loginCard()
         else if (_slots.isEmpty)
           _message(Icons.event_busy, '現在予約可能な日程はありません')
         else ...[
+          _accountBar(),
+          const SizedBox(height: 20),
           _dateSelector(),
           const SizedBox(height: 24),
           if (_selectedDate != null) _slotGrid(),
@@ -282,6 +388,118 @@ class _ReservePageState extends State<ReservePage> {
           const SizedBox(height: 60),
         ],
       ],
+    );
+  }
+
+  // ---- Googleログインカード（未ログイン時） ----
+  Widget _loginCard() {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 24),
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        border: Border.all(color: _line),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Icon(Icons.account_circle_outlined, size: 48, color: _accent),
+          const SizedBox(height: 20),
+          const Text('予約にはGoogleログインが必要です',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 18, color: _ink, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8F0FE),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text(
+              '学校のGoogleアカウント\n（ …@gse.okayama-c.ed.jp ）\nでログインしてください',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 14,
+                  color: _accent,
+                  fontWeight: FontWeight.w600,
+                  height: 1.7),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '※ 上記以外のアカウントは、スタッフが許可したメールアドレスのみ予約できます。',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: _sub, height: 1.6),
+          ),
+          if (_authNotice != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFCE8E6),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _authNotice!,
+                textAlign: TextAlign.center,
+                style:
+                    const TextStyle(fontSize: 13, color: _red, height: 1.7),
+              ),
+            ),
+          ],
+          const SizedBox(height: 24),
+          SizedBox(
+            height: 48,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: _accent,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24)),
+              ),
+              onPressed: _startLogin,
+              icon: const Icon(Icons.login, size: 18),
+              label: const Text('Googleでログイン',
+                  style: TextStyle(fontSize: 15)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---- ログイン中アカウント表示 ----
+  Widget _accountBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _line),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.account_circle, size: 18, color: _green),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _email ?? 'ログイン済み',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13, color: _ink),
+            ),
+          ),
+          TextButton(
+            onPressed: _logout,
+            style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+            child: const Text('別のアカウント',
+                style: TextStyle(fontSize: 12, color: _accent)),
+          ),
+        ],
+      ),
     );
   }
 
