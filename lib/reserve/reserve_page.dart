@@ -80,6 +80,7 @@ class _ReservePageState extends State<ReservePage> {
         _email = remail.isEmpty ? null : remail;
         _authChecking = false;
       });
+      _redirectIfReserved(rs);
       return;
     }
     if (rerr.isNotEmpty) {
@@ -119,6 +120,24 @@ class _ReservePageState extends State<ReservePage> {
       _email = email;
       _authChecking = false;
     });
+    _redirectIfReserved(stored);
+  }
+
+  /// すでに有効な予約（待機中・呼出中・体験中）があるアカウントなら
+  /// 整理券ページへ飛ばす。終了・キャンセル済みはそのまま再予約可。
+  Future<void> _redirectIfReserved(String session) async {
+    try {
+      final res = await ApiService.instance.ticketBySession(session);
+      if (res == null || !mounted) return; // セッション切れ等は何もしない
+      final (code, ticket, _) = res;
+      const active = {'waiting', 'called', 'playing'};
+      if (active.contains(ticket.status)) {
+        TicketStorage.storeCode(code);
+        gotoHashRoute('/ticket');
+      }
+    } catch (_) {
+      // NOTICKET（整理券なし）など → 普通に予約フローへ
+    }
   }
 
   void _startLogin() {
@@ -358,9 +377,6 @@ class _ReservePageState extends State<ReservePage> {
             style: TextStyle(
                 fontSize: 26, color: _ink, fontWeight: FontWeight.w400)),
         const SizedBox(height: 6),
-        const Text('体験予約',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 15, color: _sub)),
         const SizedBox(height: 32),
         if (_loading || _authChecking)
           const Padding(
