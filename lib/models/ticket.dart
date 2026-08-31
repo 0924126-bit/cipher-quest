@@ -44,6 +44,7 @@ class Ticket {
   final int staffUnread;
   final bool reviewPosted;
   final int reservedSlot; // 予約スロット開始（epoch sec、0=当日券）
+  final String reservedEmail; // 予約者のGoogleメール（staff viewのみ、''=当日券）
   final int position; // 0-based queue position (-1 = not queued)
   final int etaSec;
   // user view extras
@@ -70,6 +71,7 @@ class Ticket {
     required this.staffUnread,
     required this.reviewPosted,
     this.reservedSlot = 0,
+    this.reservedEmail = '',
     required this.position,
     required this.etaSec,
     required this.gameSec,
@@ -98,6 +100,7 @@ class Ticket {
         staffUnread: (json['staff_unread'] as num?)?.toInt() ?? 0,
         reviewPosted: (json['review_posted'] as bool?) ?? false,
         reservedSlot: (json['reserved_slot'] as num?)?.toInt() ?? 0,
+        reservedEmail: (json['reserved_email'] as String?) ?? '',
         position: (json['position'] as num?)?.toInt() ?? -1,
         etaSec: (json['eta_sec'] as num?)?.toInt() ?? 0,
         gameSec: (json['game_sec'] as num?)?.toInt() ?? 180,
