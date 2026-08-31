@@ -426,11 +426,19 @@ class ApiService {
     required String kind,
     String label = '',
     String code = '',
+    int reservedSlot = 0,
+    String place = '',
   }) async {
     final res = await http.post(
       _u('/api/tickets'),
       headers: _authJson,
-      body: jsonEncode({'kind': kind, 'label': label, 'code': code}),
+      body: jsonEncode({
+        'kind': kind,
+        'label': label,
+        'code': code,
+        if (reservedSlot > 0) 'reserved_slot': reservedSlot,
+        if (place.isNotEmpty) 'place': place,
+      }),
     );
     if (res.statusCode != 200) {
       final data =

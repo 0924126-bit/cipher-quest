@@ -354,9 +354,15 @@ class DashboardController extends ChangeNotifier {
     required String kind,
     String label = '',
     String code = '',
+    int reservedSlot = 0,
+    String place = '',
   }) async {
-    final t = await ApiService.instance
-        .issueTicket(kind: kind, label: label, code: code);
+    final t = await ApiService.instance.issueTicket(
+        kind: kind,
+        label: label,
+        code: code,
+        reservedSlot: reservedSlot,
+        place: place);
     await refreshTickets();
     return t;
   }
