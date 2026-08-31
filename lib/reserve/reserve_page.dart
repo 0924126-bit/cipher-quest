@@ -152,6 +152,8 @@ class _ReservePageState extends State<ReservePage> {
       _email = null;
       _authNotice = null;
     });
+    // ログアウト後はトップページへ戻す
+    gotoHashRoute('/');
   }
 
   @override

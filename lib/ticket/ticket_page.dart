@@ -421,6 +421,8 @@ class _TicketPageState extends State<TicketPage> {
       _ticket = null;
       _codeCtrl.clear();
     });
+    // ログアウト後はトップページへ戻す
+    gotoHashRoute('/');
   }
 
   @override
