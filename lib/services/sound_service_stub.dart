@@ -2,6 +2,7 @@
 /// (used via conditional import from sound_service.dart).
 class SoundBackend {
   void setSource(String role, String? url) {}
+  void setFx(String role, {double? volume, double? distortion, double? rate}) {}
   void play(String role, {bool loop = false}) {}
   void playOneShot(String role) {}
   void playOneShotUrl(String url) {}

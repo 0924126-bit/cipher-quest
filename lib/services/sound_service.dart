@@ -41,6 +41,22 @@ class SoundService {
 
   bool has(String role) => _backend.hasSource(role);
 
+  /// Apply live audio FX from a server payload
+  /// (role -> {volume, distortion, rate}); mid-playback boost included.
+  void updateFx(Map<String, dynamic>? fx) {
+    if (fx == null) return;
+    for (final e in fx.entries) {
+      final v = e.value;
+      if (v is! Map) continue;
+      _backend.setFx(
+        e.key,
+        volume: ((v['volume'] as num?)?.toDouble() ?? 100) / 100.0,
+        distortion: ((v['distortion'] as num?)?.toDouble() ?? 0) / 100.0,
+        rate: (v['rate'] as num?)?.toDouble() ?? 1.0,
+      );
+    }
+  }
+
   void startDecodeLoop() => _backend.play('decode', loop: true);
   void stopDecodeLoop() => _backend.stop('decode');
 
