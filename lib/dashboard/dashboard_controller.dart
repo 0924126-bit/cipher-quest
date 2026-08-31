@@ -350,8 +350,13 @@ class DashboardController extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<Ticket> issueTicket({required String kind, String label = ''}) async {
-    final t = await ApiService.instance.issueTicket(kind: kind, label: label);
+  Future<Ticket> issueTicket({
+    required String kind,
+    String label = '',
+    String code = '',
+  }) async {
+    final t = await ApiService.instance
+        .issueTicket(kind: kind, label: label, code: code);
     await refreshTickets();
     return t;
   }
@@ -378,6 +383,10 @@ class DashboardController extends ChangeNotifier {
     int? capacity,
     int? lateCancelSec,
     bool? reviewsEnabled,
+    bool? reserveEnabled,
+    int? reserveSlotSec,
+    int? reserveSlotCapacity,
+    List<ReserveWindow>? reserveWindows,
   }) async {
     await ApiService.instance.updateTicketSettings(
       gameSec: gameSec,
@@ -385,6 +394,10 @@ class DashboardController extends ChangeNotifier {
       capacity: capacity,
       lateCancelSec: lateCancelSec,
       reviewsEnabled: reviewsEnabled,
+      reserveEnabled: reserveEnabled,
+      reserveSlotSec: reserveSlotSec,
+      reserveSlotCapacity: reserveSlotCapacity,
+      reserveWindows: reserveWindows,
     );
     await refreshTickets();
   }
