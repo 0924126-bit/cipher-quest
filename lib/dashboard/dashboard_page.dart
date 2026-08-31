@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/machine.dart';
+import '../models/ticket.dart';
 import '../theme/app_theme.dart';
 import 'dashboard_controller.dart';
 import 'game_panel.dart';
@@ -272,11 +273,68 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
               ),
               const SizedBox(width: 12),
+              _chatButton(),
+              const SizedBox(width: 8),
               _ConnBadge(connected: _ctrl.connected),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  /// 右上の常設チャットアイコン。未読があれば赤バッジで件数表示。
+  Widget _chatButton() {
+    var unread = 0;
+    for (final t in _ctrl.tickets) {
+      unread += t.staffUnread;
+    }
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton(
+          tooltip: 'チャット',
+          icon: Icon(
+            unread > 0 ? Icons.chat_bubble : Icons.chat_bubble_outline,
+            size: 22,
+            color: unread > 0 ? const Color(0xFFD93025) : AppColors.dashInk,
+          ),
+          onPressed: _openChatHub,
+        ),
+        if (unread > 0)
+          Positioned(
+            right: 4,
+            top: 4,
+            child: IgnorePointer(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD93025),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                constraints: const BoxConstraints(minWidth: 16),
+                child: Text(
+                  unread > 99 ? '99+' : '$unread',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// チャットハブ: 未読のある券を先頭に、会話のある券を一覧表示。
+  Future<void> _openChatHub() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => _ChatHubDialog(ctrl: _ctrl),
     );
   }
 
@@ -768,6 +826,149 @@ class _ConnBadge extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// チャットハブ: 会話がある/未読のある整理券を一覧し、タップでチャットを開く。
+class _ChatHubDialog extends StatefulWidget {
+  final DashboardController ctrl;
+  const _ChatHubDialog({required this.ctrl});
+
+  @override
+  State<_ChatHubDialog> createState() => _ChatHubDialogState();
+}
+
+class _ChatHubDialogState extends State<_ChatHubDialog> {
+  @override
+  void initState() {
+    super.initState();
+    widget.ctrl.addListener(_onCtrl);
+  }
+
+  @override
+  void dispose() {
+    widget.ctrl.removeListener(_onCtrl);
+    super.dispose();
+  }
+
+  void _onCtrl() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 未読のある券を先頭、次に会話のある券（最終メッセージが新しい順）。
+    final items = widget.ctrl.tickets
+        .where((t) => t.chat.isNotEmpty || t.staffUnread > 0)
+        .toList()
+      ..sort((a, b) {
+        if ((a.staffUnread > 0) != (b.staffUnread > 0)) {
+          return a.staffUnread > 0 ? -1 : 1;
+        }
+        final la = a.chat.isEmpty ? 0 : a.chat.last.at;
+        final lb = b.chat.isEmpty ? 0 : b.chat.last.at;
+        return lb.compareTo(la);
+      });
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text('チャット', style: TextStyle(fontSize: 16)),
+      content: SizedBox(
+        width: 400,
+        height: 420,
+        child: items.isEmpty
+            ? const Center(
+                child: Text(
+                  'まだ会話はありません',
+                  style:
+                      TextStyle(fontSize: 12.5, color: AppColors.dashGrey),
+                ),
+              )
+            : ListView.builder(
+                itemCount: items.length,
+                itemBuilder: (context, i) => _row(items[i]),
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('閉じる'),
+        ),
+      ],
+    );
+  }
+
+  Widget _row(Ticket t) {
+    final last = t.chat.isEmpty ? null : t.chat.last;
+    final unread = t.staffUnread;
+    final name = t.label.isEmpty ? '(名前なし)' : t.label;
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+      leading: CircleAvatar(
+        radius: 16,
+        backgroundColor: unread > 0
+            ? const Color(0xFFD93025).withValues(alpha: 0.12)
+            : AppColors.dashBlue.withValues(alpha: 0.10),
+        child: Text(
+          t.number,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: unread > 0 ? const Color(0xFFD93025) : AppColors.dashBlue,
+          ),
+        ),
+      ),
+      title: Text(
+        name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 13.5,
+          fontWeight: unread > 0 ? FontWeight.w700 : FontWeight.w500,
+        ),
+      ),
+      subtitle: last == null
+          ? null
+          : Text(
+              '${last.from == 'staff' ? '運営: ' : ''}${last.text}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                color: unread > 0
+                    ? AppColors.dashInk
+                    : AppColors.dashGrey,
+                fontWeight:
+                    unread > 0 ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+      trailing: unread > 0
+          ? Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD93025),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$unread',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            )
+          : const Icon(Icons.chevron_right,
+              size: 18, color: AppColors.dashGrey),
+      onTap: () async {
+        await showDialog<void>(
+          context: context,
+          builder: (context) =>
+              TicketChatDialog(ctrl: widget.ctrl, ticketId: t.id),
+        );
+      },
     );
   }
 }

@@ -925,7 +925,7 @@ class _TicketPanelState extends State<TicketPanel> {
   Future<void> _openChat(String id) async {
     await showDialog<void>(
       context: context,
-      builder: (context) => _TicketChatDialog(ctrl: ctrl, ticketId: id),
+      builder: (context) => TicketChatDialog(ctrl: ctrl, ticketId: id),
     );
   }
 
@@ -1322,16 +1322,17 @@ class _TicketRow extends StatelessWidget {
 // チャットダイアログ（スタッフ側）
 // ====================================================================
 
-class _TicketChatDialog extends StatefulWidget {
+class TicketChatDialog extends StatefulWidget {
   final DashboardController ctrl;
   final String ticketId;
-  const _TicketChatDialog({required this.ctrl, required this.ticketId});
+  const TicketChatDialog(
+      {super.key, required this.ctrl, required this.ticketId});
 
   @override
-  State<_TicketChatDialog> createState() => _TicketChatDialogState();
+  State<TicketChatDialog> createState() => TicketChatDialogState();
 }
 
-class _TicketChatDialogState extends State<_TicketChatDialog> {
+class TicketChatDialogState extends State<TicketChatDialog> {
   final _textCtrl = TextEditingController();
   bool _sending = false;
 
