@@ -1,7 +1,7 @@
 {
     "name": "Identity E",
     "short_name": "Identity E",
-    "start_url": "./?pwa=1#/role",
+    "start_url": "./?pwa=1#/ticket",
     "scope": "./",
     "id": "identity-e-role",
     "display": "fullscreen",

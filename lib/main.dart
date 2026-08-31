@@ -64,11 +64,18 @@ class _IdentityEAppState extends State<IdentityEApp> {
   /// The initial platform route (URL hash) decides: a visitor landing
   /// on /ticket or /kutikomi never sees the lock screen. Ticket access
   /// is still protected server-side by the per-person ticket code.
+  static final String _initialPath = Uri.parse(
+          WidgetsBinding.instance.platformDispatcher.defaultRouteName)
+      .path;
+
   static final bool _gateExempt = () {
-    final route =
-        WidgetsBinding.instance.platformDispatcher.defaultRouteName;
-    final path = Uri.parse(route).path;
+    final path = _initialPath;
     // '/' は公開トップ。スタッフはロゴ10連打 → /dashboard でゲートへ。
+    // PWAは公開の整理券画面がホーム（start_url=#/ticket）。パスワード
+    // 画面はタイトル10連打（/gate）のときだけ。旧start_url（#/role）の
+    // インストール済みPWAがタスキル→再起動でロック画面に戻る問題も
+    // これで解消（/gate以外はすべて整理券にフォールバック）。
+    if (PwaService.instance.isPwa) return path != '/gate';
     return path == '/' ||
         path == '/ticket' ||
         path == '/kutikomi' ||
@@ -98,7 +105,7 @@ class _IdentityEAppState extends State<IdentityEApp> {
       title: 'Identity E',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dashboard(),
-      initialRoute: pwa ? '/role' : '/',
+      initialRoute: pwa ? '/ticket' : '/',
       // ---- site-wide password gate ----
       // builder rebuilds on every setState (unlike onGenerateRoute,
       // which only runs when a route is pushed), so the lock screen

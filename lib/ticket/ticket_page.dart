@@ -52,6 +52,22 @@ class _TicketPageState extends State<TicketPage> {
   final _chatCtrl = TextEditingController();
   final _chatScroll = ScrollController();
 
+  // 隠し導線: タイトル10連打（2秒以内間隔）→ スタッフパスワード画面。
+  // PWAでは解除後にロール選択、ブラウザではダッシュボードへ。
+  int _brandTaps = 0;
+  Timer? _brandTapReset;
+
+  void _brandTap() {
+    _brandTapReset?.cancel();
+    _brandTaps++;
+    if (_brandTaps >= 10) {
+      _brandTaps = 0;
+      gotoHashRoute('/gate');
+      return;
+    }
+    _brandTapReset = Timer(const Duration(seconds: 2), () => _brandTaps = 0);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -162,6 +178,7 @@ class _TicketPageState extends State<TicketPage> {
   @override
   void dispose() {
     _poll?.cancel();
+    _brandTapReset?.cancel();
     _disconnectSocket();
     _codeCtrl.dispose();
     _chatCtrl.dispose();
@@ -428,14 +445,18 @@ class _TicketPageState extends State<TicketPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Identity E',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.w400,
-                  color: _ink,
-                  letterSpacing: 0.5,
+              GestureDetector(
+                onTap: _brandTap,
+                behavior: HitTestBehavior.opaque,
+                child: const Text(
+                  'Identity E',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.w400,
+                    color: _ink,
+                    letterSpacing: 0.5,
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
@@ -575,11 +596,15 @@ class _TicketPageState extends State<TicketPage> {
             padding: const EdgeInsets.fromLTRB(20, 12, 8, 0),
             child: Row(
               children: [
-                const Text('Identity E',
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: _ink)),
+                GestureDetector(
+                  onTap: _brandTap,
+                  behavior: HitTestBehavior.opaque,
+                  child: const Text('Identity E',
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: _ink)),
+                ),
                 const Spacer(),
                 IconButton(
                   tooltip: '別のコードを入力',
