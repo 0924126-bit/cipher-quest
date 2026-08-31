@@ -7,6 +7,9 @@ import '../models/ticket.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
 import '../services/ticket_storage.dart';
+import '../services/url_open.dart'
+    if (dart.library.js_interop) '../services/url_open_web.dart';
+import '../widgets/google_sign_in_button.dart';
 
 /// 来場者向けオンライン整理券ページ（/#/ticket）。
 ///
@@ -34,6 +37,8 @@ class _TicketPageState extends State<TicketPage> {
   Ticket? _ticket;
   bool _loading = false;
   String? _error;
+  String? _authNotice; // Googleログインのエラー表示
+  bool _googleBusy = false;
   Timer? _poll;
   SocketService? _socket;
   StreamSubscription? _socketSub;
@@ -63,6 +68,94 @@ class _TicketPageState extends State<TicketPage> {
       _refresh();
       _connectSocket();
       _startPoll();
+    } else {
+      _handleOAuthReturn();
+    }
+  }
+
+  /// OAuth callback（/?rs=..&remail=..#/ticket または ?rerr=..）の処理。
+  Future<void> _handleOAuthReturn() async {
+    final qp = Uri.base.queryParameters;
+    final rs = qp['rs'] ?? '';
+    final rerr = qp['rerr'] ?? '';
+    final remail = qp['remail'] ?? '';
+    if (rs.isNotEmpty) {
+      TicketStorage.storeReserveSession(rs);
+      if (remail.isNotEmpty) TicketStorage.storeReserveEmail(remail);
+      clearUrlQuery();
+      setState(() => _googleBusy = true);
+      await _loginWithSession(rs, redirectIfExpired: false);
+      return;
+    }
+    if (rerr.isNotEmpty) {
+      clearUrlQuery();
+      if (!mounted) return;
+      setState(() {
+        _authNotice = switch (rerr) {
+          'forbidden' => remail.isNotEmpty
+              ? 'このアカウント（$remail）は使用できません。'
+                  'gse.okayama-c.ed.jp のアカウントでログインしてください。'
+              : 'gse.okayama-c.ed.jp のアカウントでログインしてください。',
+          'denied' => 'ログインがキャンセルされました。',
+          _ => 'ログインに失敗しました。もう一度お試しください。',
+        };
+      });
+    }
+  }
+
+  /// Googleボタン: 保存済みセッションがあれば即座に、なければOAuthへ。
+  Future<void> _googleLogin() async {
+    if (_googleBusy) return;
+    final stored = TicketStorage.loadReserveSession();
+    if (stored != null && stored.isNotEmpty) {
+      setState(() => _googleBusy = true);
+      await _loginWithSession(stored, redirectIfExpired: true);
+      return;
+    }
+    gotoUrl('${Uri.base.origin}/api/reserve/google/start?dest=ticket');
+  }
+
+  /// セッションで自分の整理券を取得して表示。
+  Future<void> _loginWithSession(String session,
+      {required bool redirectIfExpired}) async {
+    try {
+      final r = await ApiService.instance.ticketBySession(session);
+      if (!mounted) return;
+      if (r == null) {
+        // セッション切れ
+        TicketStorage.storeReserveSession(null);
+        if (redirectIfExpired) {
+          gotoUrl('${Uri.base.origin}/api/reserve/google/start?dest=ticket');
+          return;
+        }
+        setState(() {
+          _googleBusy = false;
+          _authNotice = 'ログインの有効期限が切れました。もう一度ログインしてください。';
+        });
+        return;
+      }
+      final (code, t, _) = r;
+      TicketStorage.storeCode(code);
+      TicketStorage.requestNotifyPermission();
+      setState(() {
+        _googleBusy = false;
+        _code = code;
+        _ticket = t;
+        _lastNotifiedStatus = t.status;
+        _lastChatCount = t.chat.length;
+        _authNotice = null;
+      });
+      _cache(t);
+      _connectSocket();
+      _startPoll();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _googleBusy = false;
+        _authNotice = e.toString().contains('NOTICKET')
+            ? 'このアカウントの整理券はありません。先に予約するか、受付で発行されたコードを入力してください。'
+            : '接続できませんでした。もう一度お試しください。';
+      });
     }
   }
 
@@ -323,7 +416,9 @@ class _TicketPageState extends State<TicketPage> {
     );
   }
 
-  // ================= ログイン画面（コード入力） =================
+  // ================= ログイン画面（Google主役・コードは補助） =================
+  bool _showCodeEntry = false;
+
   Widget _loginView() {
     return Center(
       child: SingleChildScrollView(
@@ -332,7 +427,6 @@ class _TicketPageState extends State<TicketPage> {
           constraints: const BoxConstraints(maxWidth: 400),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
                 'Identity E',
@@ -350,8 +444,72 @@ class _TicketPageState extends State<TicketPage> {
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: _sub),
               ),
-              const SizedBox(height: 40),
-              TextField(
+              const SizedBox(height: 36),
+              const Text(
+                '予約に使った Google アカウントで\n整理券を表示できます',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: _sub, height: 1.8),
+              ),
+              if (_authNotice != null) ...[
+                const SizedBox(height: 18),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.error_outline,
+                        size: 18, color: Color(0xFFD93025)),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        _authNotice!,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFFD93025),
+                            height: 1.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 28),
+              if (_googleBusy)
+                const SizedBox(
+                  height: 44,
+                  child: Center(
+                    child: SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2.5, color: _accent),
+                    ),
+                  ),
+                )
+              else
+                GoogleSignInButton(onPressed: _googleLogin),
+              const SizedBox(height: 36),
+              // 受付発行のコード券用（控えめの補助リンク）
+              if (!_showCodeEntry)
+                TextButton(
+                  onPressed: () => setState(() => _showCodeEntry = true),
+                  child: const Text('整理券コードをお持ちの方はこちら',
+                      style: TextStyle(fontSize: 13, color: _sub)),
+                )
+              else
+                _codeEntry(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _codeEntry() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Divider(color: _line, height: 1),
+        const SizedBox(height: 24),
+        TextField(
                 controller: _codeCtrl,
                 autofocus: false,
                 textCapitalization: TextCapitalization.characters,
@@ -374,39 +532,30 @@ class _TicketPageState extends State<TicketPage> {
                     borderSide: const BorderSide(color: _accent, width: 2),
                   ),
                 ),
-                onSubmitted: (_) => _login(),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                height: 44,
-                child: FilledButton(
-                  onPressed: _loading ? null : _login,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _accent,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: _loading
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
-                      : const Text('表示する',
-                          style: TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w500)),
-                ),
-              ),
-              const SizedBox(height: 32),
-              const Text(
-                '整理券コードは受付で発行しています',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: _sub),
-              ),
-            ],
+          onSubmitted: (_) => _login(),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 44,
+          child: FilledButton(
+            onPressed: _loading ? null : _login,
+            style: FilledButton.styleFrom(
+              backgroundColor: _accent,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            child: _loading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : const Text('表示する',
+                    style: TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w500)),
           ),
         ),
-      ),
+      ],
     );
   }
 
