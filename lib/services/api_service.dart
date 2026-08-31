@@ -563,6 +563,25 @@ class ApiService {
   // 整理券 — 来場者側（整理券コードが認証。サイトパスワード不要）
   // ==================================================================
 
+  /// Googleセッションで自分の整理券を取得。(code, ticket, email)。
+  /// セッション無効=null（再ログイン）、整理券なし=例外 'NOTICKET'。
+  Future<(String, Ticket, String)?> ticketBySession(String session) async {
+    final res = await http.post(
+      _u('/api/ticket/bysession'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'session': session}),
+    );
+    if (res.statusCode == 401) return null;
+    if (res.statusCode == 404) throw Exception('NOTICKET');
+    if (res.statusCode != 200) throw Exception('failed to login');
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    return (
+      (data['code'] as String?) ?? '',
+      Ticket.fromJson(data['ticket'] as Map<String, dynamic>),
+      (data['email'] as String?) ?? '',
+    );
+  }
+
   Future<Ticket?> ticketLogin(String code) async {
     final res = await http.post(
       _u('/api/ticket/login'),
