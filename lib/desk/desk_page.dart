@@ -114,10 +114,12 @@ class _DeskPageState extends State<DeskPage> {
       ..sort((a, b) => a.calledAt.compareTo(b.calledAt));
     final waiting = _tickets.where((t) => t.status == 'waiting').toList()
       ..sort((a, b) => a.position.compareTo(b.position));
-    // 直近のキャンセル（誤操作の取り消し用。新しい順に最大10件）
+    // キャンセル（誤操作の取り消し用。新しい順）
     final cancelled = _tickets.where((t) => t.status == 'cancelled').toList()
       ..sort((a, b) => b.cancelledAt.compareTo(a.cancelledAt));
-    final recentCancelled = cancelled.take(10).toList();
+    // 終了（間違えて終了したときの取り消し用。新しい順）
+    final done = _tickets.where((t) => t.status == 'done').toList()
+      ..sort((a, b) => b.finishedAt.compareTo(a.finishedAt));
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -187,10 +189,19 @@ class _DeskPageState extends State<DeskPage> {
                             _waitingCard(waiting[i], i),
                       ),
                     ),
-                  if (recentCancelled.isNotEmpty) ...[
+                  if (cancelled.isNotEmpty) ...[
                     const SizedBox(height: 20),
-                    _sectionLabel('直近のキャンセル（間違えたら「列に戻す」）', _red),
-                    for (final t in recentCancelled) _cancelledCard(t),
+                    _sectionLabel(
+                        'キャンセル（間違えたら「列に戻す」・${cancelled.length}件）',
+                        _red),
+                    _scrollPane(cancelled, _cancelledCard, maxInline: 3),
+                  ],
+                  if (done.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    _sectionLabel(
+                        '終了済み（間違えたら「列に戻す」・${done.length}件）',
+                        _sub),
+                    _scrollPane(done, _doneCard, maxInline: 3),
                   ],
                   const SizedBox(height: 40),
                 ],
@@ -472,6 +483,73 @@ class _DeskPageState extends State<DeskPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ---- 終了済み: 誤って終了したときの取り消し用 ----
+  Widget _doneCard(Ticket t) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F9F6),
+        border: Border.all(color: _line),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_title(t),
+                    style: const TextStyle(
+                        fontSize: 18,
+                        color: _ink,
+                        fontWeight: FontWeight.w500)),
+                Text('終了・${_elapsed(t.finishedAt)}前',
+                    style: const TextStyle(fontSize: 12, color: _sub)),
+              ],
+            ),
+          ),
+          SizedBox(
+            width: 110,
+            height: 48,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: _accent),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: _busy ? null : () => _action(t, 'requeue'),
+              icon: const Icon(Icons.undo, size: 16, color: _accent),
+              label: const Text('列に戻す',
+                  style: TextStyle(fontSize: 14, color: _accent)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 件数が少なければそのまま並べ、多ければ固定高さのスクロール枠にする。
+  /// （縦に無限に伸びるのを防ぐ。ListView.builderで遅延生成）
+  Widget _scrollPane(List<Ticket> items, Widget Function(Ticket) card,
+      {int maxInline = 3}) {
+    if (items.length <= maxInline) {
+      return Column(children: [for (final t in items) card(t)]);
+    }
+    return Container(
+      height: 300,
+      decoration: BoxDecoration(
+        border: Border.all(color: _line),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: ListView.builder(
+        padding: const EdgeInsets.all(8),
+        itemCount: items.length,
+        itemBuilder: (context, i) => card(items[i]),
       ),
     );
   }
