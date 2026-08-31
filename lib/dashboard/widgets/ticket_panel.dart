@@ -277,10 +277,24 @@ class _TicketPanelState extends State<TicketPanel> {
     ));
   }
 
+  /// 検索クエリ（番号・名前メモ・Googleアカウント・コードで絞り込み）
+  String _searchQuery = '';
+  final _searchCtrl = TextEditingController();
+
+  bool _matches(Ticket t) {
+    final q = _searchQuery.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    return t.number.toLowerCase().contains(q) ||
+        t.label.toLowerCase().contains(q) ||
+        t.reservedEmail.toLowerCase().contains(q) ||
+        t.code.toLowerCase().contains(q) ||
+        t.place.toLowerCase().contains(q);
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = ctrl.ticketSettings;
-    final tickets = ctrl.tickets;
+    final tickets = ctrl.tickets.where(_matches).toList();
     final active = tickets.where((t) => t.isActive).toList();
     final finished = tickets.where((t) => !t.isActive).toList();
 
@@ -340,6 +354,61 @@ class _TicketPanelState extends State<TicketPanel> {
 
             // ---- settings ----
             _settingsBar(s),
+            const SizedBox(height: 14),
+
+            // ---- 検索 + タイムライン ----
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 40,
+                    child: TextField(
+                      controller: _searchCtrl,
+                      onChanged: (v) => setState(() => _searchQuery = v),
+                      style: const TextStyle(fontSize: 13.5),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        prefixIcon: const Icon(Icons.search, size: 18),
+                        suffixIcon: _searchQuery.isEmpty
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.close, size: 16),
+                                onPressed: () {
+                                  _searchCtrl.clear();
+                                  setState(() => _searchQuery = '');
+                                },
+                              ),
+                        hintText: '検索：番号・名前・Googleアカウント・コード',
+                        hintStyle: const TextStyle(
+                            fontSize: 12.5, color: AppColors.dashGrey),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide:
+                              const BorderSide(color: AppColors.dashLine),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: () => _showTimeline(context),
+                  icon: const Icon(Icons.schedule, size: 16),
+                  label: const Text('タイムライン',
+                      style: TextStyle(fontSize: 12.5)),
+                ),
+              ],
+            ),
+            if (_searchQuery.trim().isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                '検索結果: ${tickets.length}件',
+                style: const TextStyle(
+                    fontSize: 12, color: AppColors.dashGrey),
+              ),
+            ],
             const SizedBox(height: 14),
 
             // ---- active list ----
@@ -557,6 +626,14 @@ class _TicketPanelState extends State<TicketPanel> {
               style: TextStyle(fontSize: 12.5, color: AppColors.dashBlue)),
         ),
       ],
+    );
+  }
+
+  // ---- タイムライン: 日時ごとに誰がどの順番で来るかを一望 ----
+  Future<void> _showTimeline(BuildContext context) async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => _TimelineDialog(tickets: ctrl.tickets),
     );
   }
 
@@ -1543,6 +1620,196 @@ class _ReviewModerationDialogState extends State<_ReviewModerationDialog> {
                           );
                         },
                       ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('閉じる'),
+        ),
+      ],
+    );
+  }
+}
+
+/// タイムラインダイアログ: 予約スロット（日時）ごとにグルーピングし、
+/// 誰がどの順番で来るかを時系列で一望できる。当日券（先着順）は
+/// 待機順のまま末尾セクションに表示。
+class _TimelineDialog extends StatelessWidget {
+  final List<Ticket> tickets;
+
+  const _TimelineDialog({required this.tickets});
+
+  static const _wd = ['月', '火', '水', '木', '金', '土', '日'];
+
+  String _slotLabel(int epochSec) {
+    final d = DateTime.fromMillisecondsSinceEpoch(epochSec * 1000);
+    return '${d.month}月${d.day}日(${_wd[d.weekday - 1]}) '
+        '${d.hour}:${d.minute.toString().padLeft(2, '0')}〜';
+  }
+
+  Color _statusColor(String status) => switch (status) {
+        'waiting' => AppColors.dashGrey,
+        'called' => const Color(0xFFF29900),
+        'playing' => const Color(0xFF188038),
+        'done' => AppColors.dashBlue,
+        _ => AppColors.dashRed,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    // 予約券: スロット別にグルーピング（キャンセルは薄く表示）
+    final reserved = tickets.where((t) => t.reservedSlot > 0).toList()
+      ..sort((a, b) => a.reservedSlot.compareTo(b.reservedSlot));
+    final slots = <int, List<Ticket>>{};
+    for (final t in reserved) {
+      slots.putIfAbsent(t.reservedSlot, () => []).add(t);
+    }
+    // 当日券（先着順）: 待機列の順番のまま
+    final walkIn = tickets
+        .where((t) => t.reservedSlot == 0 && t.isActive)
+        .toList()
+      ..sort((a, b) => a.position.compareTo(b.position));
+
+    Widget ticketLine(Ticket t, {int? order}) {
+      final dim = !t.isActive;
+      final c = _statusColor(t.status);
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Opacity(
+          opacity: dim ? 0.45 : 1,
+          child: Row(
+            children: [
+              if (order != null)
+                SizedBox(
+                  width: 26,
+                  child: Text('$order.',
+                      style: const TextStyle(
+                          fontSize: 12.5, color: AppColors.dashGrey)),
+                ),
+              SizedBox(
+                width: 52,
+                child: Text('No.${t.number}',
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w700)),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: c.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(t.statusLabel,
+                    style: TextStyle(
+                        fontSize: 10.5,
+                        color: c,
+                        fontWeight: FontWeight.w600)),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  [
+                    if (t.label.isNotEmpty) t.label,
+                    if (t.reservedEmail.isNotEmpty) t.reservedEmail,
+                  ].join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.dashGrey),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    Widget section(String title, Color color, List<Widget> children) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 14, bottom: 6),
+            child: Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration:
+                      BoxDecoration(color: color, shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 8),
+                Text(title,
+                    style: TextStyle(
+                        fontSize: 13.5,
+                        color: color,
+                        fontWeight: FontWeight.w700)),
+              ],
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.only(left: 3),
+            padding: const EdgeInsets.only(left: 16),
+            decoration: const BoxDecoration(
+              border: Border(
+                left: BorderSide(color: AppColors.dashLine, width: 2),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: children,
+            ),
+          ),
+        ],
+      );
+    }
+
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+    return AlertDialog(
+      title: const Row(
+        children: [
+          Icon(Icons.schedule, size: 20, color: AppColors.dashBlue),
+          SizedBox(width: 8),
+          Text('タイムライン'),
+        ],
+      ),
+      content: SizedBox(
+        width: 520,
+        height: 480,
+        child: (slots.isEmpty && walkIn.isEmpty)
+            ? const Center(
+                child: Text('表示する整理券がありません',
+                    style: TextStyle(color: AppColors.dashGrey)))
+            : SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final e in slots.entries)
+                      section(
+                        _slotLabel(e.key) +
+                            (e.key < now ? '（過去）' : ''),
+                        e.key < now
+                            ? AppColors.dashGrey
+                            : AppColors.dashBlue,
+                        [
+                          for (var i = 0; i < e.value.length; i++)
+                            ticketLine(e.value[i], order: i + 1),
+                        ],
+                      ),
+                    if (walkIn.isNotEmpty)
+                      section(
+                        '当日券（先着順・${walkIn.length}組）',
+                        const Color(0xFF188038),
+                        [
+                          for (var i = 0; i < walkIn.length; i++)
+                            ticketLine(walkIn[i], order: i + 1),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
       ),
       actions: [
         TextButton(
