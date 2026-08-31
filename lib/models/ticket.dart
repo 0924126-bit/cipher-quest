@@ -220,6 +220,7 @@ class TicketSettings {
 class Review {
   final String id;
   final String ticketNumber;
+  final String name; // 投稿者ニックネーム（予約時に登録、変更不可）
   final int stars;
   final String text;
   final int at;
@@ -227,6 +228,7 @@ class Review {
   const Review({
     required this.id,
     required this.ticketNumber,
+    required this.name,
     required this.stars,
     required this.text,
     required this.at,
@@ -235,6 +237,7 @@ class Review {
   factory Review.fromJson(Map<String, dynamic> json) => Review(
         id: (json['id'] as String?) ?? '',
         ticketNumber: (json['ticket_number'] as String?) ?? '',
+        name: (json['name'] as String?) ?? '',
         stars: (json['stars'] as num?)?.toInt() ?? 5,
         text: (json['text'] as String?) ?? '',
         at: (json['at'] as num?)?.toInt() ?? 0,

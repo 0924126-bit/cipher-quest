@@ -194,6 +194,16 @@ class _KutikomiPageState extends State<KutikomiPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (r.name.isNotEmpty) ...[
+            Text(
+              r.name,
+              style: const TextStyle(
+                  fontSize: 13,
+                  color: _ink,
+                  fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+          ],
           Row(
             children: [
               _starRow(r.stars),

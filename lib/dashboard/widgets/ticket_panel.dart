@@ -1520,7 +1520,7 @@ class _ReviewModerationDialogState extends State<_ReviewModerationDialog> {
       builder: (ctx) => AlertDialog(
         title: const Text('口コミを削除'),
         content: Text(
-            'No.${r.ticketNumber} ★${r.stars}\n「${r.text}」\n\nこの口コミを削除しますか？'),
+            '${r.name.isEmpty ? '' : '${r.name} '}No.${r.ticketNumber} ★${r.stars}\n「${r.text}」\n\nこの口コミを削除しますか？'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -1599,6 +1599,17 @@ class _ReviewModerationDialogState extends State<_ReviewModerationDialog> {
                                         color: Color(0xFFF9AB00),
                                         fontSize: 13)),
                                 const SizedBox(width: 8),
+                                if (r.name.isNotEmpty) ...[
+                                  Flexible(
+                                    child: Text(r.name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w600)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
                                 Text('No.${r.ticketNumber}',
                                     style: const TextStyle(
                                         fontSize: 12,
