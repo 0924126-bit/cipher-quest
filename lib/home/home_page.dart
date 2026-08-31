@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../services/pwa_service.dart';
 import '../services/url_open.dart'
     if (dart.library.js_interop) '../services/url_open_web.dart';
 
@@ -58,7 +59,8 @@ class _HomePageState extends State<HomePage> {
     _taps++;
     if (_taps >= 10) {
       _taps = 0;
-      gotoHashRoute('/dashboard');
+      // PWAはロック画面（/gate）→ロール選択、ブラウザはダッシュボードへ。
+      gotoHashRoute(PwaService.instance.isPwa ? '/gate' : '/dashboard');
       return;
     }
     _tapReset = Timer(const Duration(seconds: 2), () => _taps = 0);

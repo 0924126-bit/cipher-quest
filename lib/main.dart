@@ -105,7 +105,7 @@ class _IdentityEAppState extends State<IdentityEApp> {
       title: 'Identity E',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dashboard(),
-      initialRoute: pwa ? '/ticket' : '/',
+      initialRoute: '/',
       // ---- site-wide password gate ----
       // builder rebuilds on every setState (unlike onGenerateRoute,
       // which only runs when a route is pushed), so the lock screen
@@ -138,7 +138,9 @@ class _IdentityEAppState extends State<IdentityEApp> {
             );
 
         // ---- Public visitor routes (no site password) ----
-        if (!pwa && (name == '/' || segs.isEmpty)) {
+        // PWAでも起動画面はホームメニュー
+        // （予約する / 整理券を表示 / 口コミを見る）。
+        if (name == '/' || segs.isEmpty) {
           return fade(const HomePage());
         }
         if (segs.length == 1) {
