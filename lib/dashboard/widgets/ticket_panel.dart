@@ -993,23 +993,160 @@ class _TicketRow extends StatelessWidget {
             ],
           ),
           IconButton(
-            tooltip: '通知を送る',
-            icon: const Icon(Icons.notifications_none,
-                size: 18, color: AppColors.dashGrey),
-            onPressed: onNotify,
+            tooltip: '詳細を見る',
+            icon: const Icon(Icons.more_horiz,
+                size: 20, color: AppColors.dashGrey),
+            onPressed: () => _showDetail(context),
           ),
-          if (onShowCode != null)
-            IconButton(
-              tooltip: 'コードを表示',
-              icon: const Icon(Icons.qr_code_2,
-                  size: 18, color: AppColors.dashGrey),
-              onPressed: onShowCode,
+        ],
+      ),
+    );
+  }
+
+  // ---- 詳細ダイアログ: Googleアカウント・各種時刻・補助操作を集約 ----
+  void _showDetail(BuildContext context) {
+    final t = ticket;
+    String when(int sec) {
+      if (sec <= 0) return '—';
+      final d = DateTime.fromMillisecondsSinceEpoch(sec * 1000);
+      return '${d.month}/${d.day} ${d.hour}:${d.minute.toString().padLeft(2, '0')}';
+    }
+
+    Widget row(String label, String value, {bool selectable = false}) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 120,
+              child: Text(label,
+                  style: const TextStyle(
+                      fontSize: 12.5, color: AppColors.dashGrey)),
             ),
-          IconButton(
-            tooltip: '削除',
-            icon: const Icon(Icons.delete_outline,
-                size: 18, color: AppColors.dashGrey),
-            onPressed: onDelete,
+            Expanded(
+              child: selectable
+                  ? SelectableText(value,
+                      style: const TextStyle(fontSize: 13.5))
+                  : Text(value, style: const TextStyle(fontSize: 13.5)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final slotLabel = t.reservedSlot > 0
+        ? () {
+            final d =
+                DateTime.fromMillisecondsSinceEpoch(t.reservedSlot * 1000);
+            return '${d.month}/${d.day} ${d.hour}:${d.minute.toString().padLeft(2, '0')}〜';
+          }()
+        : '—（当日券）';
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Text('No.${t.number}',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(width: 10),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: _statusColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(t.statusLabel,
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: _statusColor,
+                      fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                row('種別', t.kind == 'paper' ? '紙の整理券' : 'オンライン'),
+                if (t.label.isNotEmpty) row('名前・メモ', t.label),
+                row(
+                  'Googleアカウント',
+                  t.reservedEmail.isEmpty ? '—（未使用）' : t.reservedEmail,
+                  selectable: t.reservedEmail.isNotEmpty,
+                ),
+                row('予約枚', slotLabel),
+                const Divider(height: 20),
+                row('発行', when(t.createdAt)),
+                row('呼出', when(t.calledAt)),
+                row('開始', when(t.startedAt)),
+                row('終了', when(t.finishedAt)),
+                if (t.cancelledAt > 0) ...[
+                  row('キャンセル', when(t.cancelledAt)),
+                  row(
+                      'キャンセル理由',
+                      switch (t.cancelReason) {
+                        'late' => '遅刻による自動キャンセル',
+                        'user' => '本人によるキャンセル',
+                        _ => '運営によるキャンセル',
+                      }),
+                ],
+                if (t.reviewPosted) row('口コミ', '投稿済み'),
+                const Divider(height: 20),
+                // 補助操作（使用頻度の低いものはここに集約）
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        onNotify();
+                      },
+                      icon: const Icon(Icons.notifications_none, size: 16),
+                      label: const Text('通知を送る',
+                          style: TextStyle(fontSize: 12.5)),
+                    ),
+                    if (onShowCode != null)
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          onShowCode!();
+                        },
+                        icon: const Icon(Icons.qr_code_2, size: 16),
+                        label: const Text('コードを表示',
+                            style: TextStyle(fontSize: 12.5)),
+                      ),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.dashRed,
+                        side: BorderSide(
+                            color:
+                                AppColors.dashRed.withValues(alpha: 0.4)),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        onDelete();
+                      },
+                      icon: const Icon(Icons.delete_outline, size: 16),
+                      label: const Text('削除',
+                          style: TextStyle(fontSize: 12.5)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('閉じる'),
           ),
         ],
       ),
