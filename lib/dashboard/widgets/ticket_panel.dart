@@ -485,21 +485,31 @@ class _TicketPanelState extends State<TicketPanel> {
                 ),
               ),
               if (_showFinished)
-                Column(
-                  children: [
-                    for (final t in finished) ...[
-                      _TicketRow(
+                // 件数が多くても縦に伸びないよう枠内スクロールにする。
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 320),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.dashLine),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    itemCount: finished.length,
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1, color: AppColors.dashLine),
+                    itemBuilder: (context, i) {
+                      final t = finished[i];
+                      return _TicketRow(
                         ticket: t,
                         onAction: (a) => ctrl.ticketAction(t.id, a),
                         onChat: () => _openChat(t.id),
                         onNotify: () => _sendNotify(t),
                         onDelete: () => _confirmDelete(t),
                         onShowCode: null,
-                      ),
-                      if (t != finished.last)
-                        const Divider(height: 1, color: AppColors.dashLine),
-                    ],
-                  ],
+                      );
+                    },
+                  ),
                 ),
             ],
           ],
