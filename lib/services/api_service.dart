@@ -422,11 +422,15 @@ class ApiService {
     return (tickets, settings, (data['active'] as num?)?.toInt() ?? 0);
   }
 
-  Future<Ticket> issueTicket({required String kind, String label = ''}) async {
+  Future<Ticket> issueTicket({
+    required String kind,
+    String label = '',
+    String code = '',
+  }) async {
     final res = await http.post(
       _u('/api/tickets'),
       headers: _authJson,
-      body: jsonEncode({'kind': kind, 'label': label}),
+      body: jsonEncode({'kind': kind, 'label': label, 'code': code}),
     );
     if (res.statusCode != 200) {
       final data =
@@ -443,6 +447,10 @@ class ApiService {
     int? capacity,
     int? lateCancelSec,
     bool? reviewsEnabled,
+    bool? reserveEnabled,
+    int? reserveSlotSec,
+    int? reserveSlotCapacity,
+    List<ReserveWindow>? reserveWindows,
   }) async {
     final res = await http.patch(
       _u('/api/tickets/settings'),
@@ -453,9 +461,52 @@ class ApiService {
         if (capacity != null) 'capacity': capacity,
         if (lateCancelSec != null) 'late_cancel_sec': lateCancelSec,
         if (reviewsEnabled != null) 'reviews_enabled': reviewsEnabled,
+        if (reserveEnabled != null) 'reserve_enabled': reserveEnabled,
+        if (reserveSlotSec != null) 'reserve_slot_sec': reserveSlotSec,
+        if (reserveSlotCapacity != null)
+          'reserve_slot_capacity': reserveSlotCapacity,
+        if (reserveWindows != null)
+          'reserve_windows': reserveWindows.map((w) => w.toJson()).toList(),
       }),
     );
     if (res.statusCode != 200) throw Exception('failed to update settings');
+  }
+
+  // ==================================================================
+  // 予約 — 公開（認証不要）
+  // ==================================================================
+
+  /// 空きスロット一覧。(enabled, slotSec, slotCapacity, slots)
+  Future<(bool, int, int, List<ReserveSlot>)> reserveSlots() async {
+    final res = await http.get(_u('/api/reserve/slots'));
+    if (res.statusCode != 200) throw Exception('failed to load slots');
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    final slots = ((data['slots'] as List?) ?? const [])
+        .map((e) => ReserveSlot.fromJson(e as Map<String, dynamic>))
+        .toList();
+    return (
+      (data['enabled'] as bool?) ?? false,
+      (data['slot_sec'] as num?)?.toInt() ?? 1800,
+      (data['slot_capacity'] as num?)?.toInt() ?? 5,
+      slots,
+    );
+  }
+
+  /// 予約作成。成功で (code, ticket)、失敗で例外（メッセージ入り）。
+  Future<(String, Ticket)> reserveCreate(int slotStart, String label) async {
+    final res = await http.post(
+      _u('/api/reserve'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'slot_start': slotStart, 'label': label}),
+    );
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    if (res.statusCode != 200) {
+      throw Exception((data['detail'] as String?) ?? '予約に失敗しました');
+    }
+    return (
+      (data['code'] as String?) ?? '',
+      Ticket.fromJson(data['ticket'] as Map<String, dynamic>),
+    );
   }
 
   /// action: call / start / finish / cancel / requeue / read
