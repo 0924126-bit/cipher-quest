@@ -60,7 +60,7 @@ class _ReservePageState extends State<ReservePage> {
       _error = null;
     });
     try {
-      final (enabled, _, __, slots) = await ApiService.instance.reserveSlots();
+      final (enabled, _, _, slots) = await ApiService.instance.reserveSlots();
       if (!mounted) return;
       setState(() {
         _enabled = enabled;
