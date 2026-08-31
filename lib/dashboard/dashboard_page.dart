@@ -9,6 +9,7 @@ import 'widgets/machine_card.dart';
 import 'widgets/quick_actions_panel.dart';
 import 'widgets/role_panel.dart';
 import 'widgets/sound_panel.dart';
+import 'widgets/ticket_panel.dart';
 
 /// 運営ダッシュボード。
 ///
@@ -32,6 +33,7 @@ class _DashboardPageState extends State<DashboardPage> {
   final _keyMachines = GlobalKey();
   final _keyRoles = GlobalKey();
   final _keySounds = GlobalKey();
+  final _keyTickets = GlobalKey();
   final _keyGame = GlobalKey();
 
   @override
@@ -185,6 +187,14 @@ class _DashboardPageState extends State<DashboardPage> {
                                 child: SoundPanel(ctrl: _ctrl),
                               ),
 
+                              // ---- 5. 整理券 ----
+                              _section(
+                                key: _keyTickets,
+                                title: '整理券',
+                                sub: 'オンライン整理券の発行・呼出・チャット・設定（紙券も登録可）',
+                                child: TicketPanel(ctrl: _ctrl),
+                              ),
+
                               // ---- 5. ゲーム ----
                               _section(
                                 key: _keyGame,
@@ -255,6 +265,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       _navItem('暗号機', () => _jumpTo(_keyMachines)),
                       _navItem('ロール', () => _jumpTo(_keyRoles)),
                       _navItem('サウンド', () => _jumpTo(_keySounds)),
+                      _navItem('整理券', () => _jumpTo(_keyTickets)),
                       _navItem('ゲーム', () => _jumpTo(_keyGame)),
                     ],
                   ),
