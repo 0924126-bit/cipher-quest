@@ -649,6 +649,12 @@ class ApiService {
     return (data['detail'] as String?) ?? '投稿に失敗しました';
   }
 
+  /// 口コミ削除（運営・サイト認証必須）。
+  Future<bool> deleteReview(String id) async {
+    final res = await http.delete(_u('/api/reviews/$id'), headers: _auth);
+    return res.statusCode == 200;
+  }
+
   /// 公開口コミ一覧（認証不要）。
   Future<(bool, List<Review>)> listReviews() async {
     final res = await http.get(_u('/api/reviews'));
