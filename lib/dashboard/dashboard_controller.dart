@@ -387,6 +387,7 @@ class DashboardController extends ChangeNotifier {
     int? reserveSlotSec,
     int? reserveSlotCapacity,
     List<ReserveWindow>? reserveWindows,
+    List<String>? reserveAllowedEmails,
   }) async {
     await ApiService.instance.updateTicketSettings(
       gameSec: gameSec,
@@ -398,6 +399,7 @@ class DashboardController extends ChangeNotifier {
       reserveSlotSec: reserveSlotSec,
       reserveSlotCapacity: reserveSlotCapacity,
       reserveWindows: reserveWindows,
+      reserveAllowedEmails: reserveAllowedEmails,
     );
     await refreshTickets();
   }
