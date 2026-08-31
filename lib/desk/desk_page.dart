@@ -34,7 +34,7 @@ class _DeskPageState extends State<DeskPage> {
   bool _loaded = false;
   bool _busy = false;
   SocketService? _socket;
-  StreamSubscription? _sub;
+  StreamSubscription? _wsSub;
   Timer? _clock; // 経過時間の表示更新用（状態は一切進めない）
 
   @override
@@ -42,7 +42,7 @@ class _DeskPageState extends State<DeskPage> {
     super.initState();
     _load();
     final s = SocketService('/ws/dashboard', autoReconnect: true);
-    _sub = s.messages.listen((msg) {
+    _wsSub = s.messages.listen((msg) {
       if (msg['type'] == 'tickets_changed') _load();
     });
     s.connect();
@@ -55,7 +55,7 @@ class _DeskPageState extends State<DeskPage> {
   @override
   void dispose() {
     _clock?.cancel();
-    _sub?.cancel();
+    _wsSub?.cancel();
     _socket?.dispose();
     super.dispose();
   }
