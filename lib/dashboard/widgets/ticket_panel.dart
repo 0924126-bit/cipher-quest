@@ -471,6 +471,8 @@ class _TicketPanelState extends State<TicketPanel> {
               (v) => ctrl.updateTicketSettings(reserveSlotCapacity: v));
         }),
         chip('予約可能日時', '${s.reserveWindows.length}件', _editWindows),
+        chip('予約許可メール', '${s.reserveAllowedEmails.length}件',
+            _editAllowedEmails),
         ActionChip(
           onPressed: () => Navigator.of(context).pushNamed('/desk'),
           avatar: const Icon(Icons.point_of_sale,
@@ -598,6 +600,121 @@ class _TicketPanelState extends State<TicketPanel> {
     if (changed != true) return;
     try {
       await ctrl.updateTicketSettings(reserveWindows: windows);
+    } catch (e) {
+      _snackErr('保存に失敗: ${_msg(e)}');
+    }
+  }
+
+  // ---- 予約許可メールの編集（gse.okayama-c.ed.jp ドメインは常時許可） ----
+  Future<void> _editAllowedEmails() async {
+    final emails =
+        List<String>.from(ctrl.ticketSettings.reserveAllowedEmails);
+    final inputCtrl = TextEditingController();
+    final changed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setD) {
+          void addEmail() {
+            final v = inputCtrl.text.trim().toLowerCase();
+            if (v.isEmpty || !v.contains('@') || emails.contains(v)) return;
+            setD(() {
+              emails.add(v);
+              inputCtrl.clear();
+            });
+          }
+
+          return AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text('予約を許可するメールアドレス'),
+            content: SizedBox(
+              width: 380,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '@gse.okayama-c.ed.jp のGoogleアカウントは常に予約できます。'
+                    'それ以外のアカウントを許可したい場合だけ、ここに追加してください。',
+                    style:
+                        TextStyle(fontSize: 12, color: AppColors.dashGrey),
+                  ),
+                  const SizedBox(height: 12),
+                  if (emails.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Text('追加の許可メールはありません（ドメインのみ）。',
+                          style: TextStyle(
+                              fontSize: 13, color: AppColors.dashGrey)),
+                    )
+                  else
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 220),
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (var i = 0; i < emails.length; i++)
+                            ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.mail_outline,
+                                  size: 18, color: AppColors.dashBlue),
+                              title: Text(emails[i],
+                                  style: const TextStyle(fontSize: 13.5)),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline,
+                                    size: 18, color: AppColors.dashRed),
+                                onPressed: () =>
+                                    setD(() => emails.removeAt(i)),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: inputCtrl,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: const InputDecoration(
+                            hintText: 'example@gmail.com',
+                            isDense: true,
+                          ),
+                          style: const TextStyle(fontSize: 13.5),
+                          onSubmitted: (_) => addEmail(),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: addEmail,
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('追加'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('キャンセル',
+                    style: TextStyle(color: AppColors.dashGrey)),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('保存'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (changed != true) return;
+    try {
+      await ctrl.updateTicketSettings(reserveAllowedEmails: emails);
     } catch (e) {
       _snackErr('保存に失敗: ${_msg(e)}');
     }
