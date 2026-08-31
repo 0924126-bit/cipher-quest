@@ -107,7 +107,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    '文化祭アトラクション',
+                    '史上最恐の鬼ごっこ',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 14, color: _sub),
                   ),
