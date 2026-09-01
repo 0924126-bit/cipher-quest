@@ -26,6 +26,10 @@ class AlarmService {
   /// Ominous notification sting for curse events.
   void playCurseSting() => _backend.playCurseSting();
 
+  /// 3-second continuous tension alarm, auto-played on the timer screen
+  /// when the cursed role fires a curse (rising pulses + drone + heartbeat).
+  void playCurseAlarm() => _backend.playCurseAlarm();
+
   /// Sub-bass rumble feedback when the curse button is pressed.
   void playCursePress() => _backend.playCursePress();
 
