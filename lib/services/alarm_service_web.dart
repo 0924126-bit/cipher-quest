@@ -172,6 +172,69 @@ class AlarmBackend {
     osc.stop(t + 1.7);
   }
 
+  // ---------- curse alarm on the timer screen (3s tension burst) ----------
+  /// 呪い発動をタイマー画面から自動再生する3秒間の緊張音。
+  /// - 交互2音の警告パルス(徐々に音程が上がり緊迫感が増す)
+  /// - 下support: 上昇する低音ドローン
+  /// - 加速する心臓鼓動キック
+  void playCurseAlarm() {
+    final ctx = _context();
+    final t0 = ctx.currentTime;
+
+    // 1) 交互2音の警告パルス: 0.15秒刻み x 20 = 3.0秒。
+    //    回を追うごとに音程が上がり「迫ってくる」感を出す。
+    for (var i = 0; i < 20; i++) {
+      final t = t0 + i * 0.15;
+      final osc = ctx.createOscillator();
+      final gain = ctx.createGain();
+      osc.type = 'square';
+      final f = (i % 2 == 0) ? 620.0 + i * 16 : 415.0 + i * 12;
+      osc.frequency.setValueAtTime(f, t);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.26, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.15);
+    }
+
+    // 2) 低音ドローン: 3秒かけて55→130Hzへ這い上がる不穏な支え。
+    final drone = ctx.createOscillator();
+    final droneGain = ctx.createGain();
+    drone.type = 'sawtooth';
+    drone.frequency.setValueAtTime(55, t0);
+    drone.frequency.exponentialRampToValueAtTime(130, t0 + 3.0);
+    droneGain.gain.setValueAtTime(0.0001, t0);
+    droneGain.gain.exponentialRampToValueAtTime(0.3, t0 + 0.15);
+    droneGain.gain.setValueAtTime(0.3, t0 + 2.4);
+    droneGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 3.0);
+    drone.connect(droneGain);
+    droneGain.connect(ctx.destination);
+    drone.start(t0);
+    drone.stop(t0 + 3.05);
+
+    // 3) 加速する心臓鼓動: 間隔 0.42→0.18秒 と詰まっていくキック。
+    var beatT = t0;
+    var interval = 0.42;
+    while (beatT < t0 + 2.8) {
+      final kick = ctx.createOscillator();
+      final kickGain = ctx.createGain();
+      kick.type = 'sine';
+      kick.frequency.setValueAtTime(150, beatT);
+      kick.frequency.exponentialRampToValueAtTime(40, beatT + 0.12);
+      kickGain.gain.setValueAtTime(0.0001, beatT);
+      kickGain.gain.exponentialRampToValueAtTime(0.65, beatT + 0.015);
+      kickGain.gain.exponentialRampToValueAtTime(0.0001, beatT + 0.16);
+      kick.connect(kickGain);
+      kickGain.connect(ctx.destination);
+      kick.start(beatT);
+      kick.stop(beatT + 0.18);
+      beatT += interval;
+      if (interval > 0.18) interval -= 0.03;
+    }
+  }
+
   void vibrate() {
     try {
       web.window.navigator.vibrate([200, 100, 300].jsify() as JSAny);
