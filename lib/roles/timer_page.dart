@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/role_config.dart';
+import '../services/alarm_service.dart';
 import '../services/api_service.dart';
 import '../services/key_sound_map.dart';
+import '../services/socket_service.dart';
 import '../services/sound_service.dart';
 import 'widgets/timer_candles.dart';
 import 'widgets/timer_faces.dart';
@@ -18,6 +20,8 @@ import 'widgets/timer_faces.dart';
 /// - 背景: ダッシュボードから差し替え可能な廃校画像（初期は内蔵の廃校廊下）
 /// - BGM: ループ再生（初期は合成ホラードローン、ダッシュボードでmp3差替可）
 /// - キー音: キーごとにダッシュボードで割り当てた音を再生（未割当は既定音）
+/// - 呪い: 呪術師がボタンを押すと /ws/hunter 経由で受信し、
+///   この画面から自動で3秒間の緊張音（上昇パルス+ドローン+鼓動）を鳴らす
 /// - 演出: 明滅する蛍光灯、残り時間わずかで血の色に
 class TimerPage extends StatefulWidget {
   const TimerPage({super.key});
@@ -47,6 +51,10 @@ class _TimerPageState extends State<TimerPage>
   final FocusNode _focus = FocusNode();
   bool _bgmStarted = false;
 
+  // 呪い発動の受信（/ws/hunter に乗り合い）→ 3秒の緊張音を自動再生
+  SocketService? _curseSocket;
+  StreamSubscription? _curseSub;
+
   @override
   void initState() {
     super.initState();
@@ -63,6 +71,21 @@ class _TimerPageState extends State<TimerPage>
       _load();
       _loadSounds();
     });
+    _connectCurseFeed();
+  }
+
+  /// 呪術師の発動をリアルタイム受信してタイマー側から自動で鳴らす。
+  /// init メッセージの recent_curses(過去履歴) では鳴らさず、
+  /// 接続中に届いた 'curse' イベントだけで鳴らす。
+  void _connectCurseFeed() {
+    final s = SocketService('/ws/hunter', autoReconnect: true);
+    _curseSocket = s;
+    _curseSub = s.messages.listen((msg) {
+      if (msg['type'] != 'curse') return;
+      AlarmService.instance.playCurseAlarm();
+      AlarmService.instance.vibrate();
+    });
+    s.connect();
   }
 
   Future<void> _load() async {
@@ -200,6 +223,8 @@ class _TimerPageState extends State<TimerPage>
     _tick?.cancel();
     _poll?.cancel();
     _flickerTimer?.cancel();
+    _curseSub?.cancel();
+    _curseSocket?.dispose();
     _flame.dispose();
     _focus.dispose();
     SoundService.instance.stopTimerBgm();
