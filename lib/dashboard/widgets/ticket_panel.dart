@@ -93,100 +93,171 @@ class _TicketPanelState extends State<TicketPanel> {
     final labelCtrl = TextEditingController();
     final placeCtrl = TextEditingController();
     DateTime? slotAt;
+    int quickSel = 0; // 0=先着順, 分数=今からN分後, -1=日時指定
+
+    String hm(DateTime d) {
+      final now = DateTime.now();
+      final same =
+          d.year == now.year && d.month == now.month && d.day == now.day;
+      final t = '${d.hour}:${d.minute.toString().padLeft(2, '0')}';
+      return same ? t : '${d.month}/${d.day} $t';
+    }
+
+    /// 今からN分後を5分単位に丸める（受付で扱いやすい時刻に）
+    DateTime roundedAfter(int minutes) {
+      final d = DateTime.now().add(Duration(minutes: minutes));
+      final rounded = ((d.minute + 4) ~/ 5) * 5;
+      return DateTime(d.year, d.month, d.day, d.hour, rounded);
+    }
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDlg) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('紙の整理券を登録'),
-          content: SizedBox(
-            width: 400,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '紙で配った整理券をこの待ち行列に組み込みます。オンライン券と同じ列で番号順に管理され、二重予約（オーバーブッキング）を防げます。',
-                  style: TextStyle(fontSize: 12.5, color: AppColors.dashGrey),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: labelCtrl,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'メモ（紙券の番号や名前など・任意）',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: placeCtrl,
-                  decoration: const InputDecoration(
-                    labelText: '集合場所（任意・例: 3年2組前 受付）',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // 集合日時（任意）: 設定すると15分前/5分前の自動リマインダー対象
-                Row(
+        builder: (context, setDlg) {
+          Widget chip(String text, bool selected, VoidCallback onTap) {
+            return ChoiceChip(
+              label: Text(text, style: const TextStyle(fontSize: 12.5)),
+              selected: selected,
+              onSelected: (_) => onTap(),
+              showCheckmark: false,
+              side: BorderSide(
+                  color: selected ? AppColors.dashBlue : AppColors.dashLine),
+              selectedColor: AppColors.dashBlue.withValues(alpha: 0.1),
+              labelStyle: TextStyle(
+                color: selected ? AppColors.dashBlue : AppColors.dashInk,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              ),
+              backgroundColor: Colors.white,
+            );
+          }
+
+          void selectQuick(int v) {
+            setDlg(() {
+              quickSel = v;
+              slotAt = v <= 0 ? null : roundedAfter(v);
+            });
+          }
+
+          Future<void> pickCustom() async {
+            final now = DateTime.now();
+            final d = await showDatePicker(
+              context: context,
+              initialDate: slotAt ?? now,
+              firstDate: now.subtract(const Duration(days: 1)),
+              lastDate: now.add(const Duration(days: 60)),
+            );
+            if (d == null || !context.mounted) return;
+            final t = await showTimePicker(
+              context: context,
+              initialTime: TimeOfDay.fromDateTime(slotAt ?? now),
+            );
+            if (t == null) return;
+            setDlg(() {
+              quickSel = -1;
+              slotAt = DateTime(d.year, d.month, d.day, t.hour, t.minute);
+            });
+          }
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20)),
+            title: const Text('紙の整理券を登録'),
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
+                    const Text(
+                      '紙で配った整理券をオンライン券と同じ待ち行列に組み込みます。'
+                      '番号は自動で採番され、二重予約を防げます。',
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          color: AppColors.dashGrey,
+                          height: 1.6),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: labelCtrl,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: 'メモ（紙券の番号や名前など・任意）',
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: placeCtrl,
+                      decoration: const InputDecoration(
+                        labelText: '集合場所（任意・例: 3年2組前 受付）',
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    const Text(
+                      '集合時刻',
+                      style: TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        chip('先着順（今すぐ列へ）', quickSel == 0,
+                            () => selectQuick(0)),
+                        chip('15分後', quickSel == 15, () => selectQuick(15)),
+                        chip('30分後', quickSel == 30, () => selectQuick(30)),
+                        chip('45分後', quickSel == 45, () => selectQuick(45)),
+                        chip('1時間後', quickSel == 60, () => selectQuick(60)),
+                        chip(
+                          quickSel == -1 && slotAt != null
+                              ? '${hm(slotAt!)} に指定中'
+                              : '日時を指定…',
+                          quickSel == -1,
+                          pickCustom,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // 選択内容のプレビュー（1行で確認できる）
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.dashBlue.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       child: Text(
                         slotAt == null
-                            ? '集合日時: 未設定（先着順）'
-                            : '集合日時: ${slotAt!.month}/${slotAt!.day} '
-                                '${slotAt!.hour}:${slotAt!.minute.toString().padLeft(2, '0')}',
-                        style: const TextStyle(fontSize: 13),
+                            ? '先着順で今の列の最後尾に入ります'
+                            : '集合時刻 ${hm(slotAt!)} ごろ　'
+                                '（15分前・5分前に自動リマインド）',
+                        style: const TextStyle(
+                            fontSize: 12.5,
+                            color: AppColors.dashBlue,
+                            fontWeight: FontWeight.w600),
                       ),
                     ),
-                    TextButton(
-                      onPressed: () async {
-                        final now = DateTime.now();
-                        final d = await showDatePicker(
-                          context: context,
-                          initialDate: slotAt ?? now,
-                          firstDate: now.subtract(const Duration(days: 1)),
-                          lastDate: now.add(const Duration(days: 60)),
-                        );
-                        if (d == null || !context.mounted) return;
-                        final t = await showTimePicker(
-                          context: context,
-                          initialTime: TimeOfDay.fromDateTime(slotAt ?? now),
-                        );
-                        if (t == null) return;
-                        setDlg(() => slotAt = DateTime(
-                            d.year, d.month, d.day, t.hour, t.minute));
-                      },
-                      child: const Text('選択'),
-                    ),
-                    if (slotAt != null)
-                      IconButton(
-                        tooltip: 'クリア',
-                        icon: const Icon(Icons.close, size: 16),
-                        onPressed: () => setDlg(() => slotAt = null),
-                      ),
                   ],
                 ),
-                if (slotAt != null)
-                  const Text(
-                    '設定した日時の15分前・5分前に自動通知されます（オンライン閲覧者のみ）',
-                    style:
-                        TextStyle(fontSize: 11.5, color: AppColors.dashGrey),
-                  ),
-              ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('キャンセル',
-                  style: TextStyle(color: AppColors.dashGrey)),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('登録'),
-            ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('キャンセル',
+                    style: TextStyle(color: AppColors.dashGrey)),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('この内容で発行'),
+              ),
+            ],
+          );
+        },
       ),
     );
     if (ok != true || !mounted) return;
@@ -295,7 +366,29 @@ class _TicketPanelState extends State<TicketPanel> {
   Widget build(BuildContext context) {
     final s = ctrl.ticketSettings;
     final tickets = ctrl.tickets.where(_matches).toList();
-    final active = tickets.where((t) => t.isActive).toList();
+    // 来る時間順に並べる: プレイ中→呼出中→待機（予約時刻/発行順のマージ）。
+    // サーバーの生配列は発行順のため、ここで案内順に揃える。
+    int sortKey(Ticket t) =>
+        t.reservedSlot > 0 && t.status == 'waiting'
+            ? (t.reservedSlot > t.createdAt ? t.reservedSlot : t.createdAt)
+            : t.createdAt;
+    int statusRank(Ticket t) => switch (t.status) {
+          'playing' => 0,
+          'called' => 1,
+          _ => 2,
+        };
+    final active = tickets.where((t) => t.isActive).toList()
+      ..sort((a, b) {
+        final r = statusRank(a).compareTo(statusRank(b));
+        if (r != 0) return r;
+        // 待機中は待ち行列のposition（=予約時刻を織り込んだ順番）を優先
+        if (a.status == 'waiting' && b.status == 'waiting') {
+          if (a.position >= 0 && b.position >= 0 && a.position != b.position) {
+            return a.position.compareTo(b.position);
+          }
+        }
+        return sortKey(a).compareTo(sortKey(b));
+      });
     final finished = tickets.where((t) => !t.isActive).toList();
 
     return Card(
@@ -1042,7 +1135,17 @@ class _TicketRow extends StatelessWidget {
   String get _etaLabel {
     if (ticket.status != 'waiting') return '';
     final min = (ticket.etaSec / 60).ceil();
-    return '約$min分後 / 前に${ticket.position}組';
+    var s = '約$min分後 / 前に${ticket.position}組';
+    if (ticket.reservedSlot > 0) {
+      final d =
+          DateTime.fromMillisecondsSinceEpoch(ticket.reservedSlot * 1000);
+      final now = DateTime.now();
+      final same =
+          d.year == now.year && d.month == now.month && d.day == now.day;
+      final hm = '${d.hour}:${d.minute.toString().padLeft(2, '0')}';
+      s = '${same ? hm : '${d.month}/${d.day} $hm'} 集合 · $s';
+    }
+    return s;
   }
 
   @override
