@@ -101,11 +101,16 @@ class _IdentityEAppState extends State<IdentityEApp> {
   @override
   Widget build(BuildContext context) {
     final pwa = PwaService.instance.isPwa;
+    // PWAが start_url（#/）で起動したとき = タスクキル後の再起動も含む。
+    // 最後に見ていた画面を復元して「毎回インデックスに戻る」のを防ぐ。
+    // （通知タップなどで #/ticket 等の具体的なhash付きで開いた場合は
+    //  defaultRouteNameが優先され、initialRouteは無視されるので安全）
+    final restored = pwa ? PwaService.instance.lastRoute() : null;
     return MaterialApp(
       title: 'Identity E',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dashboard(),
-      initialRoute: '/',
+      initialRoute: (restored != null && restored != '/gate') ? restored : '/',
       // ---- site-wide password gate ----
       // builder rebuilds on every setState (unlike onGenerateRoute,
       // which only runs when a route is pushed), so the lock screen
@@ -128,6 +133,12 @@ class _IdentityEAppState extends State<IdentityEApp> {
         final name = settings.name ?? '/';
         final uri = Uri.parse(name);
         final segs = uri.pathSegments;
+
+        // PWA: 今いる画面を記憶（タスクキル→再起動でここに戻る）。
+        // /gate（ロック画面）だけは記憶しない。
+        if (uri.path != '/gate') {
+          PwaService.instance.rememberRoute(uri.path);
+        }
 
         PageRouteBuilder fade(Widget page) => PageRouteBuilder(
               settings: settings,

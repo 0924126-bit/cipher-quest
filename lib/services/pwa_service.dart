@@ -32,4 +32,12 @@ class PwaService {
     final path = name.split('?').first;
     return allowedRoutes.contains(path) || path == '/';
   }
+
+  /// PWAで最後に見ていた画面を保存（タスクキル復帰用）。
+  void rememberRoute(String path) {
+    if (isPwa) saveLastRoute(path);
+  }
+
+  /// タスクキル復帰時に戻るべき画面（なければ null）。
+  String? lastRoute() => isPwa ? loadLastRoute() : null;
 }
