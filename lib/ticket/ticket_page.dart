@@ -13,6 +13,7 @@ import '../services/ticket_storage.dart';
 import '../services/url_open.dart'
     if (dart.library.js_interop) '../services/url_open_web.dart';
 import '../widgets/google_sign_in_button.dart';
+import '../widgets/pwa_install_guide.dart';
 
 /// 来場者向けオンライン整理券ページ（/#/ticket）。
 ///
@@ -771,6 +772,8 @@ class _TicketPageState extends State<TicketPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _notifyBanner(),
+                // PWA未導入の人向け: ホーム画面追加の案内（手順+動画）
+                const PwaInstallGuideCard(),
                 // ---- 券面 ----
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 36),
@@ -869,22 +872,52 @@ class _TicketPageState extends State<TicketPage> {
     );
   }
 
+  /// "14:05" 形式（今日以外は "9/1 14:05"）
+  String _hm(DateTime d) {
+    final now = DateTime.now();
+    final sameDay =
+        d.year == now.year && d.month == now.month && d.day == now.day;
+    final hm = '${d.hour}:${d.minute.toString().padLeft(2, '0')}';
+    return sameDay ? hm : '${d.month}/${d.day} $hm';
+  }
+
   List<Widget> _statusDetail(Ticket t) {
     if (t.status == 'waiting') {
       final mins = (t.etaSec / 60).ceil();
+      final now = DateTime.now();
+      // 予想開始時刻: 行列の進行状況からの推定（遅延も自動反映）。
+      // 予約券で予定より早くは始まらないので、予定時刻との遅い方を採用。
+      final queueEta = now.add(Duration(seconds: t.etaSec));
+      final scheduled = t.reservedSlot > 0
+          ? DateTime.fromMillisecondsSinceEpoch(t.reservedSlot * 1000)
+          : null;
+      final predicted = (scheduled != null && queueEta.isBefore(scheduled))
+          ? scheduled
+          : queueEta;
+      final delayed = scheduled != null &&
+          predicted.difference(scheduled).inMinutes >= 3;
       return [
-        if (t.reservedSlot > 0)
-          _kv('集合日時', () {
-            final d =
-                DateTime.fromMillisecondsSinceEpoch(t.reservedSlot * 1000);
-            return '${d.month}/${d.day} ${d.hour}:${d.minute.toString().padLeft(2, '0')}';
-          }()),
+        if (scheduled != null) _kv('当初の予定', _hm(scheduled)),
+        _kvStyled(
+          scheduled != null ? '予想時刻（現在）' : '開始予想時刻',
+          '${_hm(predicted)} ごろ',
+          color: delayed ? const Color(0xFFB05A00) : _ink,
+        ),
+        if (delayed)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 4),
+            child: Text(
+              '進行が遅れているため、予定より遅くなっています。最新の予想時刻に合わせてお越しください。',
+              style: TextStyle(
+                  fontSize: 12, color: Color(0xFFB05A00), height: 1.6),
+            ),
+          ),
         if (t.place.isNotEmpty) _kv('集合場所', t.place),
         _kv('あなたの前', t.position <= 0 ? 'なし（次です）' : '${t.position} 組'),
-        _kv('開始予想', mins <= 1 ? 'まもなく' : '約 $mins 分後'),
+        _kv('開始まで', mins <= 1 ? 'まもなく' : '約 $mins 分'),
         const SizedBox(height: 8),
         const Text(
-          '順番が近づくと通知でお知らせします。予想時間は進行状況で自動的に変わります。',
+          '順番が近づくと通知でお知らせします。予想時刻は進行状況で自動的に更新されます。',
           style: TextStyle(fontSize: 12, color: _sub, height: 1.7),
         ),
       ];
@@ -904,7 +937,9 @@ class _TicketPageState extends State<TicketPage> {
     return const [];
   }
 
-  Widget _kv(String k, String v) {
+  Widget _kv(String k, String v) => _kvStyled(k, v, color: _ink);
+
+  Widget _kvStyled(String k, String v, {required Color color}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -914,8 +949,8 @@ class _TicketPageState extends State<TicketPage> {
               child:
                   Text(k, style: const TextStyle(fontSize: 13, color: _sub))),
           Text(v,
-              style: const TextStyle(
-                  fontSize: 15, color: _ink, fontWeight: FontWeight.w500)),
+              style: TextStyle(
+                  fontSize: 15, color: color, fontWeight: FontWeight.w500)),
         ],
       ),
     );
