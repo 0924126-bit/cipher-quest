@@ -5,6 +5,7 @@ class AlarmBackend {
   void startSiren() {}
   void stopSiren() {}
   void playCurseSting() {}
+  void playCurseAlarm() {}
   void playCursePress() {}
   void vibrate() {}
   void dispose() {}
