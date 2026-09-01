@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/machine.dart';
 import '../models/ticket.dart';
+import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import 'dashboard_controller.dart';
 import 'game_panel.dart';
@@ -358,6 +359,60 @@ class _DashboardPageState extends State<DashboardPage> {
     await showDialog<void>(
       context: context,
       builder: (context) => _ChatHubDialog(ctrl: _ctrl),
+    );
+  }
+
+  /// テストデータのリセット（RESET 入力で確認 → 全整理券・口コミ・連番・push購読を初期化）。
+  Future<void> _wipeTestData() async {
+    final ctrl = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('テストデータをリセット'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'すべての整理券・口コミを削除し、整理券番号を1から振り直します。'
+              'この操作は元に戻せません。\n\n続行するには RESET と入力してください。',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'RESET',
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('キャンセル'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.dashRed),
+            onPressed: () =>
+                Navigator.pop(context, ctrl.text.trim() == 'RESET'),
+            child: const Text('削除する'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final done = await ApiService.instance.wipeTickets();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(done
+            ? 'テストデータをリセットしました（次の発券は No.1 から）'
+            : 'リセットに失敗しました'),
+      ),
     );
   }
 
