@@ -203,6 +203,29 @@ class _DashboardPageState extends State<DashboardPage> {
                                 sub: '追加コンテンツの管理',
                                 child: const GamePanel(),
                               ),
+
+                              // ---- 最下部: テストデータの初期化（小さく） ----
+                              Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(
+                                      top: 8, bottom: 24),
+                                  child: TextButton.icon(
+                                    onPressed: _wipeTestData,
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: AppColors.dashGrey,
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 6),
+                                    ),
+                                    icon: const Icon(
+                                        Icons.delete_sweep_outlined,
+                                        size: 14),
+                                    label: const Text(
+                                      'テストデータをリセット（整理券・口コミを全削除）',
+                                      style: TextStyle(fontSize: 11.5),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ),

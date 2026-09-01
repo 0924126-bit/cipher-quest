@@ -663,6 +663,12 @@ class ApiService {
     return res.statusCode == 200;
   }
 
+  /// 全整理券・口コミ・連番・push購読の一括リセット（テスト後の初期化）。
+  Future<bool> wipeTickets() async {
+    final res = await http.post(_u('/api/tickets/wipe'), headers: _auth);
+    return res.statusCode == 200;
+  }
+
   // ==================================================================
   // Web Push（タブを閉じていても・iOSタスクキル中でも届く通知）
   // ==================================================================
