@@ -8,6 +8,7 @@ import '../models/role_config.dart';
 import '../services/alarm_service.dart';
 import '../services/api_service.dart';
 import '../services/fullscreen_service.dart';
+import '../services/socket_service.dart';
 import '../theme/app_theme.dart';
 
 /// チェイサー用ページ。
@@ -30,7 +31,8 @@ class _ChaserPageState extends State<ChaserPage>
   bool _alarming = false;
   int _remaining = 0;
   Timer? _countdown;
-  Timer? _configPoll;
+  SocketService? _socket;
+  StreamSubscription? _wsSub;
 
   late final AnimationController _pulse;
 
@@ -41,11 +43,29 @@ class _ChaserPageState extends State<ChaserPage>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     )..repeat(reverse: true);
+    // 初回だけHTTPで即時表示。以降の設定変更（再許可含む）は
+    // /ws/hunter のプッシュで反映。ポーリングは行わない
+    // （Cloudflare無料枠のリクエスト数節約）。
     _loadConfig();
-    // 運営がダッシュボードで設定を変えたら数秒で反映される
-    _configPoll = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (!_alarming) _loadConfig();
+    _connectFeed();
+  }
+
+  void _connectFeed() {
+    final s = SocketService('/ws/hunter', autoReconnect: true);
+    _socket = s;
+    _wsSub = s.messages.listen((msg) {
+      final type = msg['type'];
+      if (type != 'init' && type != 'roles') return;
+      final roles = msg['roles'];
+      if (roles is! Map<String, dynamic>) return;
+      // 警報鳴動中はローカル状態を優先（鳴り終わりに取り直す）
+      if (_alarming || !mounted) return;
+      setState(() {
+        _config = RoleConfig.fromJson(roles).chaser;
+        _loading = false;
+      });
     });
+    s.connect();
   }
 
   Future<void> _loadConfig() async {
@@ -119,7 +139,8 @@ class _ChaserPageState extends State<ChaserPage>
   @override
   void dispose() {
     _countdown?.cancel();
-    _configPoll?.cancel();
+    _wsSub?.cancel();
+    _socket?.dispose();
     AlarmService.instance.stopSiren();
     _pulse.dispose();
     super.dispose();
