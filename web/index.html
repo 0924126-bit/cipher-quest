@@ -201,12 +201,15 @@
     // The deploy step writes build_id.js (window.__IE_BUILD_ID, cached with
     // this build) and build_id.json (~25 bytes, always fetched no-store).
     // If the ids differ the client is stale -> hard refresh with an
-    // "アップデート中…" screen. Checks: 4s after launch, when the app
-    // returns to foreground, and every 10 minutes. No heavy polling.
+    // "アップデート中…" screen. Checks: 4s after launch and when the app
+    // returns to foreground (throttled to once per 5 minutes).
+    // NO periodic polling — keeps requests inside the free tier.
     (function () {
       var REFRESH_GUARD_KEY = 'ie_upd_last_refresh';
+      var lastCheckMs = 0;
       function check() {
         if (!window.__IE_BUILD_ID) return; // dev or missing -> skip
+        lastCheckMs = Date.now();
         fetch('build_id.json?t=' + Date.now(), { cache: 'no-store' })
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (d) {
@@ -223,9 +226,11 @@
           .catch(function () {});
       }
       setTimeout(check, 4000);
-      setInterval(check, 10 * 60 * 1000);
       document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState === 'visible') setTimeout(check, 1200);
+        if (document.visibilityState !== 'visible') return;
+        // throttle: skip if we checked within the last 5 minutes
+        if (Date.now() - lastCheckMs < 5 * 60 * 1000) return;
+        setTimeout(check, 1200);
       });
     })();
 
