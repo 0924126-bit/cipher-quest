@@ -5,7 +5,6 @@ import '../models/ticket.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import 'dashboard_controller.dart';
-import 'game_panel.dart';
 import 'widgets/dialogs.dart';
 import 'widgets/machine_card.dart';
 import 'widgets/quick_actions_panel.dart';
@@ -18,7 +17,7 @@ import 'widgets/ticket_panel.dart';
 /// 白基調の日本の業務システム風UI。
 /// 最上部にクイック操作(全体リセット/警報再許可)を配置。
 /// 上部固定バーからセクションへワンタップで移動できる導線:
-///   概況 / 暗号機 / ロール / サウンド / ゲーム
+///   概況 / 暗号機 / ロール / サウンド / 整理券
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
@@ -36,7 +35,6 @@ class _DashboardPageState extends State<DashboardPage> {
   final _keyRoles = GlobalKey();
   final _keySounds = GlobalKey();
   final _keyTickets = GlobalKey();
-  final _keyGame = GlobalKey();
 
   @override
   void initState() {
@@ -197,14 +195,6 @@ class _DashboardPageState extends State<DashboardPage> {
                                 child: TicketPanel(ctrl: _ctrl),
                               ),
 
-                              // ---- 5. ゲーム ----
-                              _section(
-                                key: _keyGame,
-                                title: '3Dゲーム',
-                                sub: '追加コンテンツの管理',
-                                child: const GamePanel(),
-                              ),
-
                               // ---- 最下部: テストデータの初期化（小さく） ----
                               Center(
                                 child: Padding(
@@ -291,7 +281,6 @@ class _DashboardPageState extends State<DashboardPage> {
                       _navItem('ロール', () => _jumpTo(_keyRoles)),
                       _navItem('サウンド', () => _jumpTo(_keySounds)),
                       _navItem('整理券', () => _jumpTo(_keyTickets)),
-                      _navItem('ゲーム', () => _jumpTo(_keyGame)),
                     ],
                   ),
                 ),
