@@ -287,6 +287,7 @@ class _SoundPanelState extends State<SoundPanel> {
     'skill_fail': 'スキルチェック失敗',
     'timer_bgm': 'タイマーBGM',
     'timer_key': 'タイマーキー音',
+    'curse': '呪い発動音',
   };
 
   String _fxSummary(SoundFx fx) {
