@@ -82,7 +82,11 @@ class _TimerPageState extends State<TimerPage>
     _curseSocket = s;
     _curseSub = s.messages.listen((msg) {
       if (msg['type'] != 'curse') return;
-      AlarmService.instance.playCurseAlarm();
+      // ダッシュボードで割り当てたmp3があればそれを、
+      // なければ内蔵の合成緊張音（3秒）を鳴らす。
+      if (!SoundService.instance.playCurseCustom()) {
+        AlarmService.instance.playCurseAlarm();
+      }
       AlarmService.instance.vibrate();
     });
     s.connect();
@@ -114,6 +118,7 @@ class _TimerPageState extends State<TimerPage>
             data.roleMap['timer_bgm'] ?? '/audio/timer_bgm.mp3',
         'timer_key':
             data.roleMap['timer_key'] ?? '/audio/timer_key.mp3',
+        'curse': data.roleMap['curse'], // null=合成音フォールバック
       });
       SoundService.instance.updateKeySounds(data.keyMap);
       SoundService.instance.updateFx({
