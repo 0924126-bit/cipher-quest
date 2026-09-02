@@ -5,6 +5,7 @@ import '../../models/ticket.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../dashboard_controller.dart';
+import 'paper_issue_dialog.dart';
 
 /// Dashboard panel: online queue-ticket management.
 ///
@@ -90,185 +91,16 @@ class _TicketPanelState extends State<TicketPanel> {
   }
 
   Future<void> _issuePaper() async {
-    final labelCtrl = TextEditingController();
-    final placeCtrl = TextEditingController();
-    DateTime? slotAt;
-    int quickSel = 0; // 0=先着順, 分数=今からN分後, -1=日時指定
-
-    String hm(DateTime d) {
-      final now = DateTime.now();
-      final same =
-          d.year == now.year && d.month == now.month && d.day == now.day;
-      final t = '${d.hour}:${d.minute.toString().padLeft(2, '0')}';
-      return same ? t : '${d.month}/${d.day} $t';
-    }
-
-    /// 今からN分後を5分単位に丸める（受付で扱いやすい時刻に）
-    DateTime roundedAfter(int minutes) {
-      final d = DateTime.now().add(Duration(minutes: minutes));
-      final rounded = ((d.minute + 4) ~/ 5) * 5;
-      return DateTime(d.year, d.month, d.day, d.hour, rounded);
-    }
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDlg) {
-          Widget chip(String text, bool selected, VoidCallback onTap) {
-            return ChoiceChip(
-              label: Text(text, style: const TextStyle(fontSize: 12.5)),
-              selected: selected,
-              onSelected: (_) => onTap(),
-              showCheckmark: false,
-              side: BorderSide(
-                  color: selected ? AppColors.dashBlue : AppColors.dashLine),
-              selectedColor: AppColors.dashBlue.withValues(alpha: 0.1),
-              labelStyle: TextStyle(
-                color: selected ? AppColors.dashBlue : AppColors.dashInk,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              ),
-              backgroundColor: Colors.white,
-            );
-          }
-
-          void selectQuick(int v) {
-            setDlg(() {
-              quickSel = v;
-              slotAt = v <= 0 ? null : roundedAfter(v);
-            });
-          }
-
-          Future<void> pickCustom() async {
-            final now = DateTime.now();
-            final d = await showDatePicker(
-              context: context,
-              initialDate: slotAt ?? now,
-              firstDate: now.subtract(const Duration(days: 1)),
-              lastDate: now.add(const Duration(days: 60)),
-            );
-            if (d == null || !context.mounted) return;
-            final t = await showTimePicker(
-              context: context,
-              initialTime: TimeOfDay.fromDateTime(slotAt ?? now),
-            );
-            if (t == null) return;
-            setDlg(() {
-              quickSel = -1;
-              slotAt = DateTime(d.year, d.month, d.day, t.hour, t.minute);
-            });
-          }
-
-          return AlertDialog(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20)),
-            title: const Text('紙の整理券を登録'),
-            content: SizedBox(
-              width: 420,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '紙で配った整理券をオンライン券と同じ待ち行列に組み込みます。'
-                      '番号は自動で採番され、二重予約を防げます。',
-                      style: TextStyle(
-                          fontSize: 12.5,
-                          color: AppColors.dashGrey,
-                          height: 1.6),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: labelCtrl,
-                      autofocus: true,
-                      decoration: const InputDecoration(
-                        labelText: 'メモ（紙券の番号や名前など・任意）',
-                        isDense: true,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: placeCtrl,
-                      decoration: const InputDecoration(
-                        labelText: '集合場所（任意・例: 3年2組前 受付）',
-                        isDense: true,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    const Text(
-                      '集合時刻',
-                      style: TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        chip('先着順（今すぐ列へ）', quickSel == 0,
-                            () => selectQuick(0)),
-                        chip('15分後', quickSel == 15, () => selectQuick(15)),
-                        chip('30分後', quickSel == 30, () => selectQuick(30)),
-                        chip('45分後', quickSel == 45, () => selectQuick(45)),
-                        chip('1時間後', quickSel == 60, () => selectQuick(60)),
-                        chip(
-                          quickSel == -1 && slotAt != null
-                              ? '${hm(slotAt!)} に指定中'
-                              : '日時を指定…',
-                          quickSel == -1,
-                          pickCustom,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    // 選択内容のプレビュー（1行で確認できる）
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: AppColors.dashBlue.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        slotAt == null
-                            ? '先着順で今の列の最後尾に入ります'
-                            : '集合時刻 ${hm(slotAt!)} ごろ　'
-                                '（15分前・5分前に自動リマインド）',
-                        style: const TextStyle(
-                            fontSize: 12.5,
-                            color: AppColors.dashBlue,
-                            fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('キャンセル',
-                    style: TextStyle(color: AppColors.dashGrey)),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('この内容で発行'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-    if (ok != true || !mounted) return;
+    final r = await showPaperIssueDialog(context);
+    if (r == null || !mounted) return;
     setState(() => _busy = true);
     try {
       await ctrl.issueTicket(
         kind: 'paper',
-        label: labelCtrl.text.trim(),
+        label: r.label,
         reservedSlot:
-            slotAt == null ? 0 : slotAt!.millisecondsSinceEpoch ~/ 1000,
-        place: placeCtrl.text.trim(),
+            r.slotAt == null ? 0 : r.slotAt!.millisecondsSinceEpoch ~/ 1000,
+        place: r.place,
       );
     } catch (e) {
       _snackErr('登録に失敗: ${_msg(e)}');
