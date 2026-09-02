@@ -142,7 +142,8 @@ class _PwaGuideSheetState extends State<_PwaGuideSheet> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'ホーム画面に追加して通知を許可すると、アプリを閉じていても呼び出しが届きます。',
+                  'ホーム画面に追加して通知を許可すると、アプリを閉じていても呼び出しが届きます。'
+                  '通信できないときも、保存済みの整理券をオフラインで確認できます。',
                   style: TextStyle(fontSize: 13.5, color: _sub, height: 1.7),
                 ),
                 const SizedBox(height: 20),
@@ -161,23 +162,19 @@ class _PwaGuideSheetState extends State<_PwaGuideSheet> {
                   curve: Curves.easeOutCubic,
                   alignment: Alignment.topCenter,
                   child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 240),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
+                    // Material の fade-through: 前の内容をスッと消してから
+                    // 新しい内容をふわっと出す。横移動はしない（揺れ防止）。
+                    duration: const Duration(milliseconds: 260),
+                    switchInCurve: const Interval(0.4, 1.0,
+                        curve: Curves.easeOutCubic),
+                    switchOutCurve: const Interval(0.6, 1.0,
+                        curve: Curves.easeInCubic),
                     layoutBuilder: (current, previous) => Stack(
                       alignment: Alignment.topCenter,
                       children: [...previous, if (current != null) current],
                     ),
-                    transitionBuilder: (child, anim) => FadeTransition(
-                      opacity: anim,
-                      child: SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(0.04, 0),
-                          end: Offset.zero,
-                        ).animate(anim),
-                        child: child,
-                      ),
-                    ),
+                    transitionBuilder: (child, anim) =>
+                        FadeTransition(opacity: anim, child: child),
                     child: Column(
                       key: ValueKey(_os),
                       crossAxisAlignment: CrossAxisAlignment.stretch,
