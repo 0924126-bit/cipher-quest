@@ -704,6 +704,23 @@ class ApiService {
     return res.statusCode == 200;
   }
 
+  /// テスト通知を実際にAPNs/FCM経由で送る。
+  /// 戻り値: (成功したか, 送信件数, 理由)。理由は 'no_subscription' など。
+  Future<(bool, int, String)> pushTest(String code) async {
+    final res = await http.post(
+      _u('/api/ticket/push/test'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'code': code}),
+    );
+    if (res.statusCode != 200) return (false, 0, 'http_${res.statusCode}');
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    return (
+      (data['ok'] as bool?) ?? false,
+      (data['sent'] as num?)?.toInt() ?? 0,
+      (data['reason'] as String?) ?? '',
+    );
+  }
+
   /// 公開口コミ一覧（認証不要）。
   Future<(bool, List<Review>)> listReviews() async {
     final res = await http.get(_u('/api/reviews'));
