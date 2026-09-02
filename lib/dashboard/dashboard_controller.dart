@@ -9,6 +9,7 @@ import '../models/ticket.dart';
 import '../services/alarm_service.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
+import '../services/sound_service.dart';
 
 /// Dashboard state: live machine list + event feed via WebSocket,
 /// CRUD via REST. Auto-reconnects.
@@ -64,6 +65,11 @@ class DashboardController extends ChangeNotifier {
       sounds = await ApiService.instance.listSounds();
       notifyListeners();
     } catch (_) {}
+    // 呪い発動音（curseロール）の割当も取得しておく
+    try {
+      final data = await ApiService.instance.getSoundsData();
+      SoundService.instance.updateSources({'curse': data.roleMap['curse']});
+    } catch (_) {}
   }
 
   Future<void> refreshRoles() async {
@@ -118,7 +124,9 @@ class DashboardController extends ChangeNotifier {
             curseEvents = curseEvents.sublist(0, 30);
           }
           if (curseSoundArmed) {
-            AlarmService.instance.playCurseSting();
+            if (!SoundService.instance.playCurseCustom()) {
+              AlarmService.instance.playCurseSting();
+            }
           }
           notifyListeners();
         }
