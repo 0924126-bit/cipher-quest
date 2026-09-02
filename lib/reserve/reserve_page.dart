@@ -403,10 +403,31 @@ class _ReservePageState extends State<ReservePage> {
           _dateSelector(),
           const SizedBox(height: 24),
           if (_selectedDate != null) _slotGrid(),
-          if (_selected != null) ...[
-            const SizedBox(height: 28),
-            _confirmCard(),
-          ],
+          // 確認カードはなめらかに展開（選択時にフェード＋スライド）
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: _selected == null
+                ? const SizedBox(width: double.infinity)
+                : Padding(
+                    padding: const EdgeInsets.only(top: 28),
+                    child: TweenAnimationBuilder<double>(
+                      key: ValueKey(_selected!.start),
+                      tween: Tween(begin: 0, end: 1),
+                      duration: const Duration(milliseconds: 320),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, v, child) => Opacity(
+                        opacity: v,
+                        child: Transform.translate(
+                          offset: Offset(0, 10 * (1 - v)),
+                          child: child,
+                        ),
+                      ),
+                      child: _confirmCard(),
+                    ),
+                  ),
+          ),
           const SizedBox(height: 60),
         ],
       ],
@@ -584,7 +605,9 @@ class _ReservePageState extends State<ReservePage> {
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       onTap: full ? null : () => setState(() => _selected = s),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
         width: 104,
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
