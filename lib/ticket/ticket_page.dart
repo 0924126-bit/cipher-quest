@@ -881,9 +881,25 @@ class _TicketPageState extends State<TicketPage> {
     return sameDay ? hm : '${d.month}/${d.day} $hm';
   }
 
+  /// 「開始まで」の残り時間表記。予約が翌日などでも正しく出るよう
+  /// 予想時刻（予定と行列予測の遅い方）を基準に計算する。
+  String _untilLabel(DateTime predicted) {
+    final diff = predicted.difference(DateTime.now());
+    final mins = diff.inMinutes;
+    if (mins < 1) return 'まもなく（1分以内）';
+    if (mins < 60) return '約 $mins 分後';
+    if (mins < 60 * 24) {
+      final h = mins ~/ 60;
+      final m = mins % 60;
+      return m == 0 ? '約 $h 時間後' : '約 $h 時間 $m 分後';
+    }
+    final days = diff.inDays;
+    final h = (mins - days * 60 * 24) ~/ 60;
+    return h == 0 ? '約 $days 日後' : '約 $days 日と $h 時間後';
+  }
+
   List<Widget> _statusDetail(Ticket t) {
     if (t.status == 'waiting') {
-      final mins = (t.etaSec / 60).ceil();
       final now = DateTime.now();
       // 予想開始時刻: 行列の進行状況からの推定（遅延も自動反映）。
       // 予約券で予定より早くは始まらないので、予定時刻との遅い方を採用。
@@ -914,7 +930,7 @@ class _TicketPageState extends State<TicketPage> {
           ),
         if (t.place.isNotEmpty) _kv('集合場所', t.place),
         _kv('あなたの前', t.position <= 0 ? 'なし（次です）' : '${t.position} 組'),
-        _kv('開始まで', '約 ${mins < 1 ? 1 : mins} 分後'),
+        _kv('開始まで', _untilLabel(predicted)),
         const SizedBox(height: 8),
         const Text(
           '順番が近づくと通知でお知らせします。予想時刻は進行状況で自動的に更新されます。',
