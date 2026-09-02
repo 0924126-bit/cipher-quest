@@ -364,24 +364,34 @@ class _TicketPanelState extends State<TicketPanel> {
                   ],
                 ),
               )
-            else
+            else if (active.length <= 6)
+              // 少ないうちはそのまま並べる（従来どおり）
               Column(
                 children: [
                   for (final t in active) ...[
-                    _TicketRow(
-                      ticket: t,
-                      onAction: (a) => ctrl.ticketAction(t.id, a),
-                      onChat: () => _openChat(t.id),
-                      onNotify: () => _sendNotify(t),
-                      onDelete: () => _confirmDelete(t),
-                      onShowCode: t.kind == 'online' && t.code.isNotEmpty
-                          ? () => _showCodeDialog(t)
-                          : null,
-                    ),
+                    _activeRow(t),
                     if (t != active.last)
                       const Divider(height: 1, color: AppColors.dashLine),
                   ],
                 ],
+              )
+            else
+              // 件数が増えたら固定高の枠内スクロールに切り替え。
+              // ListView.builder（shrinkWrapなし）なので画面に見えている
+              // 行だけを生成し、大量の券でも軽いまま。
+              Container(
+                height: 480,
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.dashLine),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  itemCount: active.length,
+                  separatorBuilder: (_, __) =>
+                      const Divider(height: 1, color: AppColors.dashLine),
+                  itemBuilder: (context, i) => _activeRow(active[i]),
+                ),
               ),
 
             // ---- finished/cancelled (collapsed) ----
@@ -410,15 +420,15 @@ class _TicketPanelState extends State<TicketPanel> {
                 ),
               ),
               if (_showFinished)
-                // 件数が多くても縦に伸びないよう枠内スクロールにする。
+                // 固定高の枠内スクロール（shrinkWrapなし）。見えている行
+                // だけを生成するので、履歴が何百件になっても重くならない。
                 Container(
-                  constraints: const BoxConstraints(maxHeight: 320),
+                  height: 320,
                   decoration: BoxDecoration(
                     border: Border.all(color: AppColors.dashLine),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: ListView.separated(
-                    shrinkWrap: true,
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     itemCount: finished.length,
                     separatorBuilder: (_, __) =>
@@ -440,6 +450,20 @@ class _TicketPanelState extends State<TicketPanel> {
           ],
         ),
       ),
+    );
+  }
+
+  /// 待機中・呼出中・体験中の1行（一覧・スクロール両方で共用）。
+  Widget _activeRow(Ticket t) {
+    return _TicketRow(
+      ticket: t,
+      onAction: (a) => ctrl.ticketAction(t.id, a),
+      onChat: () => _openChat(t.id),
+      onNotify: () => _sendNotify(t),
+      onDelete: () => _confirmDelete(t),
+      onShowCode: t.kind == 'online' && t.code.isNotEmpty
+          ? () => _showCodeDialog(t)
+          : null,
     );
   }
 
