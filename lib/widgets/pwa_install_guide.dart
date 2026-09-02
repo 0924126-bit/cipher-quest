@@ -4,20 +4,35 @@ import '../services/pwa_service.dart';
 import 'youtube_embed_stub.dart'
     if (dart.library.js_interop) 'youtube_embed_web.dart';
 
-/// PWA（ホーム画面追加）未導入の人向け案内。
+/// ホーム画面追加（アプリ化）未導入の人向け案内。
 ///
-/// デザイン: Googleのヘルプ画面とほぼ同じ、余計な装飾のない
-/// ミニマリズム。白地・罫線1本・青1色・番号付きのプレーンな手順。
-/// iPhone / Android はセグメントで切り替える。
+/// デザイン: Googleのヘルプ画面とほぼ同じミニマリズム。
+/// 白地・罫線1本・青1色・番号付きのプレーンな手順。
+/// セグメント切替はピルがスライド、手順はフェード＋スライド、
+/// 動画はスムーズに展開する（Material標準のイージング）。
 ///
-/// PWA（ホーム画面から起動）で表示中は出さない。
+/// アプリ（ホーム画面から起動）で表示中は出さない。
+const _ink = Color(0xFF202124);
+const _sub = Color(0xFF5F6368);
+const _line = Color(0xFFDADCE0);
+const _blue = Color(0xFF1A73E8);
+const _blueBg = Color(0xFFE8F0FE);
+
+/// どこからでも案内シートを開ける公開関数（トップページなどから使用）。
+void showPwaGuideSheet(BuildContext context) {
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (context) => const _PwaGuideSheet(),
+  );
+}
+
 class PwaInstallGuideCard extends StatelessWidget {
   const PwaInstallGuideCard({super.key});
-
-  static const _ink = Color(0xFF202124);
-  static const _sub = Color(0xFF5F6368);
-  static const _line = Color(0xFFDADCE0);
-  static const _blue = Color(0xFF1A73E8);
 
   /// ブラウザ表示のときだけ出す（アプリとして起動中は出さない）。
   static bool get shouldShow => !PwaService.instance.looksInstalled;
@@ -36,7 +51,7 @@ class PwaInstallGuideCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: () => _openGuideSheet(context),
+          onTap: () => showPwaGuideSheet(context),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
             child: Row(
@@ -67,24 +82,14 @@ class PwaInstallGuideCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 const Text('設定方法',
                     style: TextStyle(
-                        fontSize: 13, color: _blue, fontWeight: FontWeight.w500)),
+                        fontSize: 13,
+                        color: _blue,
+                        fontWeight: FontWeight.w500)),
               ],
             ),
           ),
         ),
       ),
-    );
-  }
-
-  void _openGuideSheet(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) => const _PwaGuideSheet(),
     );
   }
 }
@@ -97,12 +102,6 @@ class _PwaGuideSheet extends StatefulWidget {
 }
 
 class _PwaGuideSheetState extends State<_PwaGuideSheet> {
-  static const _ink = Color(0xFF202124);
-  static const _sub = Color(0xFF5F6368);
-  static const _line = Color(0xFFDADCE0);
-  static const _blue = Color(0xFF1A73E8);
-  static const _blueBg = Color(0xFFE8F0FE);
-
   /// 0 = iPhone, 1 = Android
   int _os = 0;
   bool _showVideo = false;
@@ -148,61 +147,89 @@ class _PwaGuideSheetState extends State<_PwaGuideSheet> {
                 ),
                 const SizedBox(height: 20),
 
-                // ---- OS切り替え（セグメント） ----
-                Container(
-                  height: 40,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: _line),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    children: [
-                      _seg('iPhone', 0),
-                      Container(width: 1, color: _line),
-                      _seg('Android', 1),
-                    ],
-                  ),
+                // ---- OS切り替え（ピルがスライドするセグメント） ----
+                _SlidingSegment(
+                  value: _os,
+                  labels: const ['iPhone', 'Android'],
+                  onChanged: (v) => setState(() => _os = v),
                 ),
                 const SizedBox(height: 20),
 
-                // ---- 手順（プレーンな番号リスト） ----
-                for (var i = 0; i < steps.length; i++) ...[
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: 28,
-                        child: Text('${i + 1}.',
-                            style: const TextStyle(
-                                fontSize: 14, color: _sub, height: 1.6)),
-                      ),
-                      Expanded(
-                        child: Text(steps[i],
-                            style: const TextStyle(
-                                fontSize: 14, color: _ink, height: 1.6)),
-                      ),
-                    ],
-                  ),
-                  if (i < steps.length - 1)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 10),
-                      child: Divider(height: 1, color: Color(0xFFF1F3F4)),
+                // ---- 手順（切替時フェード＋スライド） ----
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.topCenter,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 240),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    layoutBuilder: (current, previous) => Stack(
+                      alignment: Alignment.topCenter,
+                      children: [...previous, if (current != null) current],
                     ),
-                ],
-                if (_os == 0) ...[
-                  const SizedBox(height: 14),
-                  const Text(
-                    'Safari 以外のブラウザでは追加できないことがあります。',
-                    style: TextStyle(fontSize: 12, color: _sub, height: 1.6),
+                    transitionBuilder: (child, anim) => FadeTransition(
+                      opacity: anim,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0.04, 0),
+                          end: Offset.zero,
+                        ).animate(anim),
+                        child: child,
+                      ),
+                    ),
+                    child: Column(
+                      key: ValueKey(_os),
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var i = 0; i < steps.length; i++) ...[
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: 28,
+                                child: Text('${i + 1}.',
+                                    style: const TextStyle(
+                                        fontSize: 14,
+                                        color: _sub,
+                                        height: 1.6)),
+                              ),
+                              Expanded(
+                                child: Text(steps[i],
+                                    style: const TextStyle(
+                                        fontSize: 14,
+                                        color: _ink,
+                                        height: 1.6)),
+                              ),
+                            ],
+                          ),
+                          if (i < steps.length - 1)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 10),
+                              child: Divider(
+                                  height: 1, color: Color(0xFFF1F3F4)),
+                            ),
+                        ],
+                        if (_os == 0) ...[
+                          const SizedBox(height: 14),
+                          const Text(
+                            'Safari 以外のブラウザでは追加できないことがあります。',
+                            style: TextStyle(
+                                fontSize: 12, color: _sub, height: 1.6),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-                ],
+                ),
                 const SizedBox(height: 20),
                 const Divider(height: 1, color: _line),
                 const SizedBox(height: 8),
 
-                // ---- 動画（折りたたみ） ----
+                // ---- 動画（なめらかに展開する折りたたみ） ----
                 InkWell(
                   onTap: () => setState(() => _showVideo = !_showVideo),
+                  borderRadius: BorderRadius.circular(8),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     child: Row(
@@ -214,30 +241,37 @@ class _PwaGuideSheetState extends State<_PwaGuideSheet> {
                                   color: _ink,
                                   fontWeight: FontWeight.w500)),
                         ),
-                        Icon(
-                          _showVideo
-                              ? Icons.keyboard_arrow_up
-                              : Icons.keyboard_arrow_down,
-                          size: 20,
-                          color: _sub,
+                        AnimatedRotation(
+                          turns: _showVideo ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeOutCubic,
+                          child: const Icon(Icons.keyboard_arrow_down,
+                              size: 20, color: _sub),
                         ),
                       ],
                     ),
                   ),
                 ),
-                if (_showVideo) ...[
-                  const SizedBox(height: 8),
-                  Center(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: SizedBox(
-                        width: 270,
-                        height: 480, // Shorts(9:16)
-                        child: buildYoutubeEmbedImpl('ymC6lPMrjH8'),
-                      ),
-                    ),
-                  ),
-                ],
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.topCenter,
+                  child: _showVideo
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Center(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: SizedBox(
+                                width: 270,
+                                height: 480, // Shorts(9:16)
+                                child: buildYoutubeEmbedImpl('ymC6lPMrjH8'),
+                              ),
+                            ),
+                          ),
+                        )
+                      : const SizedBox(width: double.infinity),
+                ),
                 const SizedBox(height: 16),
                 Align(
                   alignment: Alignment.centerRight,
@@ -256,40 +290,94 @@ class _PwaGuideSheetState extends State<_PwaGuideSheet> {
       ),
     );
   }
+}
 
-  Widget _seg(String text, int value) {
-    final sel = _os == value;
-    return Expanded(
-      child: InkWell(
-        onTap: () => setState(() => _os = value),
-        borderRadius: BorderRadius.horizontal(
-          left: value == 0 ? const Radius.circular(20) : Radius.zero,
-          right: value == 1 ? const Radius.circular(20) : Radius.zero,
-        ),
-        child: Container(
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: sel ? _blueBg : Colors.transparent,
-            borderRadius: BorderRadius.horizontal(
-              left: value == 0 ? const Radius.circular(19) : Radius.zero,
-              right: value == 1 ? const Radius.circular(19) : Radius.zero,
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+/// Google風のセグメント。選択ピル（青背景）が左右にスライドし、
+/// 文字色・チェックマークもなめらかに切り替わる。
+class _SlidingSegment extends StatelessWidget {
+  final int value;
+  final List<String> labels;
+  final ValueChanged<int> onChanged;
+
+  const _SlidingSegment({
+    required this.value,
+    required this.labels,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        border: Border.all(color: _line),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final w = c.maxWidth / labels.length;
+          return Stack(
             children: [
-              if (sel) ...[
-                const Icon(Icons.check, size: 16, color: _blue),
-                const SizedBox(width: 6),
-              ],
-              Text(text,
-                  style: TextStyle(
-                      fontSize: 13.5,
-                      color: sel ? _blue : _ink,
-                      fontWeight: sel ? FontWeight.w500 : FontWeight.w400)),
+              // スライドするピル
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                left: value * w,
+                top: 0,
+                bottom: 0,
+                width: w,
+                child: Container(
+                  margin: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: _blueBg,
+                    borderRadius: BorderRadius.circular(17),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  for (var i = 0; i < labels.length; i++)
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => onChanged(i),
+                        borderRadius: BorderRadius.circular(20),
+                        child: Center(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              AnimatedSize(
+                                duration: const Duration(milliseconds: 200),
+                                curve: Curves.easeOutCubic,
+                                child: value == i
+                                    ? const Padding(
+                                        padding: EdgeInsets.only(right: 6),
+                                        child: Icon(Icons.check,
+                                            size: 16, color: _blue),
+                                      )
+                                    : const SizedBox.shrink(),
+                              ),
+                              AnimatedDefaultTextStyle(
+                                duration: const Duration(milliseconds: 200),
+                                curve: Curves.easeOutCubic,
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  color: value == i ? _blue : _ink,
+                                  fontWeight: value == i
+                                      ? FontWeight.w500
+                                      : FontWeight.w400,
+                                ),
+                                child: Text(labels[i]),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ],
-          ),
-        ),
+          );
+        },
       ),
     );
   }
