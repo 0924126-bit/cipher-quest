@@ -5,8 +5,10 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../models/role_config.dart';
 import '../services/alarm_service.dart';
+import '../services/api_service.dart';
 import '../services/fullscreen_service.dart';
 import '../services/socket_service.dart';
+import '../services/sound_service.dart';
 import '../theme/app_theme.dart';
 
 /// ハンター用のスマホ通知端末ページ。
@@ -44,7 +46,23 @@ class _HunterPageState extends State<HunterPage>
       vsync: this,
       duration: const Duration(milliseconds: 700),
     )..repeat(reverse: true);
+    _loadCurseSound();
     _connect();
+  }
+
+  /// ダッシュボードで割り当てた呪い発動音（mp3）があれば取得。
+  /// 未割当なら内蔵の合成スティングのまま。
+  Future<void> _loadCurseSound() async {
+    try {
+      final data = await ApiService.instance.getSoundsData();
+      SoundService.instance.updateSources({'curse': data.roleMap['curse']});
+    } catch (_) {}
+  }
+
+  void _playCurse() {
+    if (!SoundService.instance.playCurseCustom()) {
+      AlarmService.instance.playCurseSting();
+    }
   }
 
   void _connect() {
@@ -108,7 +126,7 @@ class _HunterPageState extends State<HunterPage>
   /// 呪い発動のアラート：即時鳴らしたあと、3秒間隔でさらに3回
   /// （合計4回・約10秒）繰り返す。ポケット内でも気づけるように。
   void _startAlertRepeat() {
-    if (_soundArmed) AlarmService.instance.playCurseSting();
+    if (_soundArmed) _playCurse();
     AlarmService.instance.vibrate();
     _repeatTimer?.cancel();
     _repeatLeft = 3;
@@ -118,7 +136,7 @@ class _HunterPageState extends State<HunterPage>
         return;
       }
       _repeatLeft--;
-      if (_soundArmed) AlarmService.instance.playCurseSting();
+      if (_soundArmed) _playCurse();
       AlarmService.instance.vibrate();
       if (_repeatLeft <= 0) timer.cancel();
     });
@@ -128,7 +146,7 @@ class _HunterPageState extends State<HunterPage>
   /// 同じジェスチャで全画面化も行う。
   void _armSound() {
     FullscreenService.instance.enter();
-    AlarmService.instance.playCurseSting();
+    _playCurse();
     setState(() => _soundArmed = true);
   }
 
