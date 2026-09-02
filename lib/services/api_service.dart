@@ -428,6 +428,7 @@ class ApiService {
     String code = '',
     int reservedSlot = 0,
     String place = '',
+    int party = 1,
   }) async {
     final res = await http.post(
       _u('/api/tickets'),
@@ -438,6 +439,7 @@ class ApiService {
         'code': code,
         if (reservedSlot > 0) 'reserved_slot': reservedSlot,
         if (place.isNotEmpty) 'place': place,
+        if (party > 1) 'party': party,
       }),
     );
     if (res.statusCode != 200) {
@@ -524,12 +526,17 @@ class ApiService {
   /// 予約作成（Googleログイン必須）。成功で (code, ticket)、
   /// 失敗で例外（401/403は 'AUTH:' プレフィックス付き→再ログイン誘導）。
   Future<(String, Ticket)> reserveCreate(
-      int slotStart, String label, String session) async {
+      int slotStart, String label, String session,
+      {int party = 1}) async {
     final res = await http.post(
       _u('/api/reserve'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(
-          {'slot_start': slotStart, 'label': label, 'session': session}),
+      body: jsonEncode({
+        'slot_start': slotStart,
+        'label': label,
+        'session': session,
+        if (party > 1) 'party': party,
+      }),
     );
     final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
     if (res.statusCode == 401 || res.statusCode == 403) {
