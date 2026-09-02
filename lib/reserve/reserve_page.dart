@@ -55,6 +55,7 @@ class _ReservePageState extends State<ReservePage> {
   Ticket? _issuedTicket;
 
   final _nameCtrl = TextEditingController();
+  int _party = 1;
 
   @override
   void initState() {
@@ -217,8 +218,9 @@ class _ReservePageState extends State<ReservePage> {
     }
     setState(() => _submitting = true);
     try {
-      final (code, ticket) = await ApiService.instance
-          .reserveCreate(slot.start, _nameCtrl.text.trim(), session);
+      final (code, ticket) = await ApiService.instance.reserveCreate(
+          slot.start, _nameCtrl.text.trim(), session,
+          party: _party);
       if (!mounted) return;
       // そのまま /ticket で使えるようコードを保存しておく
       TicketStorage.storeCode(code);
@@ -664,6 +666,36 @@ class _ReservePageState extends State<ReservePage> {
               helperMaxLines: 2,
             ),
             style: const TextStyle(fontSize: 14, color: _ink),
+          ),
+          const SizedBox(height: 16),
+          const Text('人数',
+              style: TextStyle(
+                  fontSize: 13, color: _sub, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Row(
+            children: List.generate(4, (i) {
+              final n = i + 1;
+              final sel = _party == n;
+              return Padding(
+                padding: EdgeInsets.only(right: i < 3 ? 8 : 0),
+                child: ChoiceChip(
+                  label: Text('$n人'),
+                  selected: sel,
+                  onSelected: (_) => setState(() => _party = n),
+                  showCheckmark: false,
+                  selectedColor: const Color(0xFFE8F0FE),
+                  backgroundColor: Colors.white,
+                  labelStyle: TextStyle(
+                    fontSize: 14,
+                    color: sel ? _accent : _ink,
+                    fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                  side: BorderSide(color: sel ? _accent : _line),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
+                ),
+              );
+            }),
           ),
           const SizedBox(height: 20),
           SizedBox(
