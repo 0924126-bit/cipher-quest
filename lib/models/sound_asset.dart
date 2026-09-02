@@ -48,6 +48,7 @@ class SoundAsset {
     'skill_fail': 'スキルチェック失敗',
     'timer_bgm': 'タイマーBGM（ループ）',
     'timer_key': 'タイマーキー音（既定）',
+    'curse': '呪い発動音（呪術師）',
   };
 
   String get roleLabel => roleLabels[role] ?? role;
