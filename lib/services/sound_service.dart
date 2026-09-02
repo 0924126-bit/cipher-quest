@@ -32,6 +32,7 @@ class SoundService {
       'skill_fail',
       'timer_bgm',
       'timer_key',
+      'curse',
     ]) {
       final v = roles[role];
       if (!roles.containsKey(role)) continue; // 部分更新を許容
