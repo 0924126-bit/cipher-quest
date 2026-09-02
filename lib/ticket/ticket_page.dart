@@ -147,6 +147,17 @@ class _TicketPageState extends State<TicketPage> {
           _ => 'ログインに失敗しました。もう一度お試しください。',
         };
       });
+      return;
+    }
+    // クエリなしで到着: 保存済みGoogleセッションがあれば自動で
+    // 自分の整理券を取得。使える整理券がない場合は予約画面へ自動遷移
+    // （_loginWithSession の NOTICKET 処理）。セッション切れは
+    // 静かにログイン画面を表示（紙券ユーザーのコード入力は維持）。
+    final stored = TicketStorage.loadReserveSession();
+    if (stored != null && stored.isNotEmpty) {
+      if (mounted) setState(() => _googleBusy = true);
+      await _loginWithSession(stored,
+          redirectIfExpired: false, silentExpiry: true);
     }
   }
 
@@ -163,8 +174,9 @@ class _TicketPageState extends State<TicketPage> {
   }
 
   /// セッションで自分の整理券を取得して表示。
+  /// 整理券が1枚もないアカウント（NOTICKET）は予約画面へ自動遷移。
   Future<void> _loginWithSession(String session,
-      {required bool redirectIfExpired}) async {
+      {required bool redirectIfExpired, bool silentExpiry = false}) async {
     try {
       final r = await ApiService.instance.ticketBySession(session);
       if (!mounted) return;
@@ -177,7 +189,9 @@ class _TicketPageState extends State<TicketPage> {
         }
         setState(() {
           _googleBusy = false;
-          _authNotice = 'ログインの有効期限が切れました。もう一度ログインしてください。';
+          if (!silentExpiry) {
+            _authNotice = 'ログインの有効期限が切れました。もう一度ログインしてください。';
+          }
         });
         return;
       }
@@ -198,11 +212,15 @@ class _TicketPageState extends State<TicketPage> {
       _ensurePushSubscription();
     } catch (e) {
       if (!mounted) return;
+      if (e.toString().contains('NOTICKET')) {
+        // 使える整理券がない → 予約画面へ自動遷移
+        // （Googleセッションは保持されているので予約側もログイン済みで開く）
+        gotoHashRoute('/reserve');
+        return;
+      }
       setState(() {
         _googleBusy = false;
-        _authNotice = e.toString().contains('NOTICKET')
-            ? 'このアカウントの整理券はありません。先に予約するか、受付で発行されたコードを入力してください。'
-            : '接続できませんでした。もう一度お試しください。';
+        _authNotice = '接続できませんでした。もう一度お試しください。';
       });
     }
   }
