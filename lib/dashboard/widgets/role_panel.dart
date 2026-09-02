@@ -562,50 +562,88 @@ class _RolePanelState extends State<RolePanel> {
   }
 
   Future<void> _editTimerDuration(int initial) async {
-    var value = (initial ~/ 60).clamp(1, 120).toDouble();
+    const minSec = 30; // 下限30秒
+    const maxSec = 7200; // 上限120分
+    // 30秒刻みに丸めて範囲内へ
+    var sec = ((initial / 30).round() * 30).clamp(minSec, maxSec);
+    String fmt(int s) =>
+        s % 60 == 0 ? '${s ~/ 60} 分' : '${s ~/ 60} 分 ${s % 60} 秒';
     final result = await showDialog<int>(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setInner) => AlertDialog(
-          title: const Text('タイマーの制限時間',
-              style: TextStyle(fontSize: 16)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '${value.round()} 分',
-                style: const TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.dashAmber,
+        builder: (context, setInner) {
+          Widget stepBtn(String label, int delta) {
+            final next = sec + delta;
+            final enabled = next >= minSec && next <= maxSec;
+            return OutlinedButton(
+              onPressed: enabled
+                  ? () => setInner(
+                      () => sec = next.clamp(minSec, maxSec))
+                  : null,
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(88, 44),
+                side: const BorderSide(color: AppColors.dashLine),
+              ),
+              child: Text(label,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w600)),
+            );
+          }
+
+          return AlertDialog(
+            title: const Text('タイマーの制限時間',
+                style: TextStyle(fontSize: 16)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  fmt(sec),
+                  style: const TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.dashAmber,
+                  ),
                 ),
+                const SizedBox(height: 12),
+                // ±30秒ボタン
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    stepBtn('−30秒', -30),
+                    const SizedBox(width: 12),
+                    stepBtn('+30秒', 30),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                // 大まかな調整用スライダー（30秒刻み）
+                Slider(
+                  value: sec.toDouble(),
+                  min: minSec.toDouble(),
+                  max: maxSec.toDouble(),
+                  divisions: (maxSec - minSec) ~/ 30,
+                  onChanged: (v) => setInner(
+                      () => sec = ((v / 30).round() * 30)
+                          .clamp(minSec, maxSec)),
+                ),
+                const Text(
+                  '30秒〜120分の範囲で30秒刻みに設定できます',
+                  style:
+                      TextStyle(fontSize: 12, color: AppColors.dashGrey),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('キャンセル'),
               ),
-              Slider(
-                value: value,
-                min: 1,
-                max: 120,
-                divisions: 119,
-                onChanged: (v) => setInner(() => value = v),
-              ),
-              const Text(
-                '1分〜120分の範囲で設定できます',
-                style:
-                    TextStyle(fontSize: 12, color: AppColors.dashGrey),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, sec),
+                child: const Text('保存'),
               ),
             ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('キャンセル'),
-            ),
-            ElevatedButton(
-              onPressed: () =>
-                  Navigator.pop(context, value.round() * 60),
-              child: const Text('保存'),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
     if (result != null) {
