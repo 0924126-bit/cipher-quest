@@ -122,35 +122,6 @@ class _TicketPageState extends State<TicketPage> {
     } catch (_) {}
   }
 
-  /// テスト通知: 実際にAPNs/FCM経由で自分の端末に送って確認する。
-  bool _pushTesting = false;
-
-  Future<void> _sendTestPush() async {
-    final code = _code;
-    if (code == null || _pushTesting) return;
-    setState(() => _pushTesting = true);
-    // 直前に購読を確実に登録してから送信
-    await _ensurePushSubscription();
-    String msg;
-    try {
-      final (ok, sent, reason) = await ApiService.instance.pushTest(code);
-      if (ok) {
-        msg = 'テスト通知を送信しました（$sent件）。数秒以内に届かない場合は、'
-            '端末の通知設定をご確認ください。';
-      } else if (reason == 'no_subscription') {
-        msg = 'この端末の通知登録がありません。'
-            'iPhoneはホーム画面に追加したアプリから開いて、通知を許可してください。';
-      } else {
-        msg = '送信に失敗しました（$reason）。時間をおいてお試しください。';
-      }
-    } catch (_) {
-      msg = '接続できませんでした。通信環境をご確認ください。';
-    }
-    if (!mounted) return;
-    setState(() => _pushTesting = false);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
-
   /// OAuth callback（/?rs=..&remail=..#/ticket または ?rerr=..）の処理。
   Future<void> _handleOAuthReturn() async {
     final qp = Uri.base.queryParameters;
@@ -796,41 +767,8 @@ class _TicketPageState extends State<TicketPage> {
   /// granted なら何も表示しない。denied（ブロック済み）は設定手順を案内。
   Widget _notifyBanner() {
     final perm = TicketStorage.notifyPermission();
-    if (perm == 'unsupported') return const SizedBox.shrink();
-    if (perm == 'granted') {
-      // 許可済み: 控えめな1行で「本当に届くか」をセルフチェックできる
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Row(
-          children: [
-            const Icon(Icons.notifications_active_outlined,
-                size: 16, color: Color(0xFF188038)),
-            const SizedBox(width: 8),
-            const Expanded(
-              child: Text('通知はオンです',
-                  style: TextStyle(fontSize: 12.5, color: _sub)),
-            ),
-            TextButton(
-              onPressed: _pushTesting ? null : _sendTestPush,
-              style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-              child: _pushTesting
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: _accent))
-                  : const Text('テスト通知を送る',
-                      style: TextStyle(
-                          fontSize: 12.5,
-                          color: _accent,
-                          fontWeight: FontWeight.w500)),
-            ),
-          ],
-        ),
-      );
+    if (perm == 'granted' || perm == 'unsupported') {
+      return const SizedBox.shrink();
     }
     const green = Color(0xFF188038);
     return Container(
