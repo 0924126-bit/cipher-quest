@@ -19,6 +19,26 @@ bool detectPwaMode() {
   return false;
 }
 
+/// 「インストール済みアプリとして表示中か」の緩い判定。
+/// 役割制限には使わず、PWA導入案内カードを隠す用途にだけ使う。
+/// （display-mode は稀に通常タブでも真になるが、案内カードが
+///  消えるだけなので実害がない）
+bool detectInstalledDisplay() {
+  try {
+    if (web.window.location.search.contains('pwa=1')) return true;
+    if (web.window.matchMedia('(display-mode: standalone)').matches) {
+      return true;
+    }
+    if (web.window.matchMedia('(display-mode: fullscreen)').matches) {
+      return true;
+    }
+    if (web.window.matchMedia('(display-mode: minimal-ui)').matches) {
+      return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
 /// PWAで最後に見ていた画面を保存（タスクキル復帰用）。
 void saveLastRoute(String path) {
   try {

@@ -17,6 +17,10 @@ class PwaService {
   /// True when running as an installed PWA (fullscreen/standalone launch).
   bool get isPwa => _cached ??= detectPwaMode();
 
+  /// 「アプリとして表示中」の緩い判定（案内カードの出し分け専用）。
+  /// isPwa（役割制限）とは別物。display-modeも見る。
+  bool get looksInstalled => detectInstalledDisplay();
+
   /// Routes allowed while in PWA (role-terminal) mode.
   static const allowedRoutes = <String>{
     '/role',
