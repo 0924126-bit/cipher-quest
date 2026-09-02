@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../models/ticket.dart';
+import '../../services/api_service.dart';
+
 /// 紙整理券の発行ダイアログ（ダッシュボード / 受付デスク共用）。
 ///
 /// デザイン: Google風ミニマリズム。白地・細枠・青1色。
@@ -50,6 +53,9 @@ class _PaperIssueDialogState extends State<_PaperIssueDialog> {
   late int _hour;
   late int _minute; // 5分刻み
 
+  /// 予約枠（満席判定用）。取得できなければ制限なしで動く。
+  List<ReserveSlot> _slots = const [];
+
   @override
   void initState() {
     super.initState();
@@ -58,6 +64,42 @@ class _PaperIssueDialogState extends State<_PaperIssueDialog> {
     _hour = d.hour;
     _minute = ((d.minute + 4) ~/ 5) * 5 % 60;
     if (((d.minute + 4) ~/ 5) * 5 >= 60) _hour = (_hour + 1) % 24;
+    _loadSlots();
+  }
+
+  Future<void> _loadSlots() async {
+    try {
+      final (_, _, _, slots) = await ApiService.instance.reserveSlots();
+      if (mounted) setState(() => _slots = slots);
+    } catch (_) {}
+  }
+
+  DateTime _dtFor(int dayOffset, int hour, int minute) {
+    final base = DateTime.now().add(Duration(days: dayOffset));
+    return DateTime(base.year, base.month, base.day, hour, minute);
+  }
+
+  /// この時刻は選べないか（過去 / 満席の予約枠内）。
+  bool _isBlocked(DateTime dt) {
+    if (dt.isBefore(DateTime.now())) return true;
+    final sec = dt.millisecondsSinceEpoch ~/ 1000;
+    for (final s in _slots) {
+      if (sec >= s.start && sec < s.end) return s.available <= 0;
+    }
+    return false; // 枠外（営業時間外など）は制限しない
+  }
+
+  /// その「時」に選べる分が1つもないなら 時チップごと無効。
+  bool _hourBlocked(int hour) {
+    for (var m = 0; m < 60; m += 5) {
+      if (!_isBlocked(_dtFor(_dayOffset, hour, m))) return false;
+    }
+    return true;
+  }
+
+  bool get _selectedBlocked {
+    final s = _slotAt;
+    return s != null && _isBlocked(s);
   }
 
   @override
@@ -182,7 +224,7 @@ class _PaperIssueDialogState extends State<_PaperIssueDialog> {
                   children: [
                     for (var h = 8; h <= 20; h++)
                       _chip('$h', _hour == h, () => setState(() => _hour = h),
-                          dense: true),
+                          dense: true, disabled: _hourBlocked(h)),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -194,9 +236,27 @@ class _PaperIssueDialogState extends State<_PaperIssueDialog> {
                     for (var m = 0; m < 60; m += 5)
                       _chip(m.toString().padLeft(2, '0'), _minute == m,
                           () => setState(() => _minute = m),
-                          dense: true),
+                          dense: true,
+                          disabled: _isBlocked(_dtFor(_dayOffset, _hour, m))),
                   ],
                 ),
+                if (_selectedBlocked) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFCE8E6),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      'この時刻は満席か過去のため発行できません。別の時刻を選んでください。',
+                      style:
+                          TextStyle(fontSize: 12.5, color: Color(0xFFD93025)),
+                    ),
+                  ),
+                ],
               ] else ...[
                 const SizedBox(height: 12),
                 Container(
@@ -224,14 +284,16 @@ class _PaperIssueDialogState extends State<_PaperIssueDialog> {
         ),
         FilledButton(
           style: FilledButton.styleFrom(backgroundColor: _blue),
-          onPressed: () => Navigator.pop(
-            context,
-            PaperIssueResult(
-              label: _labelCtrl.text.trim(),
-              place: _placeCtrl.text.trim(),
-              slotAt: _slotAt,
-            ),
-          ),
+          onPressed: (_useSlot && _selectedBlocked)
+              ? null
+              : () => Navigator.pop(
+                    context,
+                    PaperIssueResult(
+                      label: _labelCtrl.text.trim(),
+                      place: _placeCtrl.text.trim(),
+                      slotAt: _slotAt,
+                    ),
+                  ),
           child: Text(_useSlot ? '$_preview で発行' : '先着順で発行'),
         ),
       ],
@@ -295,16 +357,25 @@ class _PaperIssueDialogState extends State<_PaperIssueDialog> {
   }
 
   Widget _chip(String text, bool selected, VoidCallback onTap,
-      {bool dense = false}) {
+      {bool dense = false, bool disabled = false}) {
     return InkWell(
-      onTap: onTap,
+      onTap: disabled ? null : onTap,
       borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: EdgeInsets.symmetric(
             horizontal: dense ? 13 : 18, vertical: dense ? 8 : 9),
         decoration: BoxDecoration(
-          color: selected ? _blue : Colors.white,
-          border: Border.all(color: selected ? _blue : _line),
+          color: disabled
+              ? const Color(0xFFF1F3F4)
+              : selected
+                  ? _blue
+                  : Colors.white,
+          border: Border.all(
+              color: disabled
+                  ? const Color(0xFFF1F3F4)
+                  : selected
+                      ? _blue
+                      : _line),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
@@ -312,7 +383,12 @@ class _PaperIssueDialogState extends State<_PaperIssueDialog> {
           style: TextStyle(
             fontSize: 13,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-            color: selected ? Colors.white : _ink,
+            color: disabled
+                ? const Color(0xFFBDC1C6)
+                : selected
+                    ? Colors.white
+                    : _ink,
+            decoration: disabled ? TextDecoration.lineThrough : null,
           ),
         ),
       ),
