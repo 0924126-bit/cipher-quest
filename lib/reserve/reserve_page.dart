@@ -55,7 +55,7 @@ class _ReservePageState extends State<ReservePage> {
   Ticket? _issuedTicket;
 
   final _nameCtrl = TextEditingController();
-  int _party = 1;
+  int _party = 3; // 予約は3人または4人のグループのみ
 
   @override
   void initState() {
@@ -668,34 +668,38 @@ class _ReservePageState extends State<ReservePage> {
             style: const TextStyle(fontSize: 14, color: _ink),
           ),
           const SizedBox(height: 16),
-          const Text('人数',
+          const Text('人数（3人または4人のグループで予約できます）',
               style: TextStyle(
                   fontSize: 13, color: _sub, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           Row(
-            children: List.generate(4, (i) {
-              final n = i + 1;
-              final sel = _party == n;
-              return Padding(
-                padding: EdgeInsets.only(right: i < 3 ? 8 : 0),
-                child: ChoiceChip(
-                  label: Text('$n人'),
-                  selected: sel,
-                  onSelected: (_) => setState(() => _party = n),
-                  showCheckmark: false,
-                  selectedColor: const Color(0xFFE8F0FE),
-                  backgroundColor: Colors.white,
-                  labelStyle: TextStyle(
-                    fontSize: 14,
-                    color: sel ? _accent : _ink,
-                    fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+            children: [
+              for (final n in const [3, 4]) ...[
+                if (n != 3) const SizedBox(width: 8),
+                Expanded(
+                  child: ChoiceChip(
+                    label: SizedBox(
+                      width: double.infinity,
+                      child: Text('$n人', textAlign: TextAlign.center),
+                    ),
+                    selected: _party == n,
+                    onSelected: (_) => setState(() => _party = n),
+                    showCheckmark: false,
+                    selectedColor: const Color(0xFFE8F0FE),
+                    backgroundColor: Colors.white,
+                    labelStyle: TextStyle(
+                      fontSize: 14,
+                      color: _party == n ? _accent : _ink,
+                      fontWeight:
+                          _party == n ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                    side: BorderSide(color: _party == n ? _accent : _line),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
                   ),
-                  side: BorderSide(color: sel ? _accent : _line),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20)),
                 ),
-              );
-            }),
+              ],
+            ],
           ),
           const SizedBox(height: 20),
           SizedBox(
