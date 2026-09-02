@@ -6,11 +6,11 @@ import 'youtube_embed_stub.dart'
 
 /// PWA（ホーム画面追加）未導入の人向け案内。
 ///
-/// デザイン方針: Google風ミニマリズム。白地・細いグレー枠・青1色の
-/// アクセント。目立たせつつ装飾はしない。
+/// デザイン: Googleのヘルプ画面とほぼ同じ、余計な装飾のない
+/// ミニマリズム。白地・罫線1本・青1色・番号付きのプレーンな手順。
+/// iPhone / Android はセグメントで切り替える。
 ///
-/// カードをタップするとシートが開き、上に簡単な文字の手順
-/// （iPhone / Android）、その下にYouTube解説動画（Shorts埋め込み）を表示。
+/// PWA（ホーム画面から起動）で表示中は出さない。
 class PwaInstallGuideCard extends StatelessWidget {
   const PwaInstallGuideCard({super.key});
 
@@ -19,8 +19,8 @@ class PwaInstallGuideCard extends StatelessWidget {
   static const _line = Color(0xFFDADCE0);
   static const _blue = Color(0xFF1A73E8);
 
-  /// PWAとして起動していない場合だけ表示する。
-  static bool get shouldShow => !PwaService.instance.isPwa;
+  /// ブラウザ表示のときだけ出す（アプリとして起動中は出さない）。
+  static bool get shouldShow => !PwaService.instance.looksInstalled;
 
   @override
   Widget build(BuildContext context) {
@@ -41,32 +41,23 @@ class PwaInstallGuideCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
             child: Row(
               children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: _blue.withValues(alpha: 0.08),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.notifications_active_outlined,
-                      size: 19, color: _blue),
-                ),
+                const Icon(Icons.notifications_none, size: 20, color: _sub),
                 const SizedBox(width: 14),
                 const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '通知を確実に受け取るには？',
+                        '通知を受け取る',
                         style: TextStyle(
                             fontSize: 14,
                             color: _ink,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w500,
                             height: 1.4),
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'ホーム画面に追加すると、アプリを閉じていても呼び出し通知が届きます',
+                        'ホーム画面に追加すると呼び出し通知が届きます',
                         style:
                             TextStyle(fontSize: 12.5, color: _sub, height: 1.5),
                       ),
@@ -74,7 +65,9 @@ class PwaInstallGuideCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Icon(Icons.chevron_right, size: 20, color: _sub),
+                const Text('設定方法',
+                    style: TextStyle(
+                        fontSize: 13, color: _blue, fontWeight: FontWeight.w500)),
               ],
             ),
           ),
@@ -89,177 +82,214 @@ class PwaInstallGuideCard extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (context) => const _PwaGuideSheet(),
     );
   }
 }
 
-class _PwaGuideSheet extends StatelessWidget {
+class _PwaGuideSheet extends StatefulWidget {
   const _PwaGuideSheet();
 
+  @override
+  State<_PwaGuideSheet> createState() => _PwaGuideSheetState();
+}
+
+class _PwaGuideSheetState extends State<_PwaGuideSheet> {
   static const _ink = Color(0xFF202124);
   static const _sub = Color(0xFF5F6368);
   static const _line = Color(0xFFDADCE0);
   static const _blue = Color(0xFF1A73E8);
+  static const _blueBg = Color(0xFFE8F0FE);
+
+  /// 0 = iPhone, 1 = Android
+  int _os = 0;
+  bool _showVideo = false;
+
+  static const _iosSteps = [
+    'Safari でこのサイトを開く',
+    '共有ボタン（□に↑）をタップ',
+    '「ホーム画面に追加」を選ぶ',
+    '追加されたアプリを開き、通知を許可する',
+  ];
+
+  static const _androidSteps = [
+    'Chrome でこのサイトを開く',
+    '右上のメニュー（⋮）をタップ',
+    '「ホーム画面に追加」または「アプリをインストール」を選ぶ',
+    '追加されたアプリを開き、通知を許可する',
+  ];
 
   @override
   Widget build(BuildContext context) {
+    final steps = _os == 0 ? _iosSteps : _androidSteps;
     final maxH = MediaQuery.of(context).size.height * 0.9;
     return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: maxH),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 10),
-          Container(
-            width: 36,
-            height: 4,
-            decoration: BoxDecoration(
-              color: _line,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Flexible(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 18, 24, 32),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 480),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  '通知を受け取る',
+                  style: TextStyle(
+                      fontSize: 20, color: _ink, fontWeight: FontWeight.w400),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'ホーム画面に追加して通知を許可すると、アプリを閉じていても呼び出しが届きます。',
+                  style: TextStyle(fontSize: 13.5, color: _sub, height: 1.7),
+                ),
+                const SizedBox(height: 20),
+
+                // ---- OS切り替え（セグメント） ----
+                Container(
+                  height: 40,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: _line),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
                     children: [
-                      const Text(
-                        '通知を受け取るには',
-                        style: TextStyle(
-                            fontSize: 18,
-                            color: _ink,
-                            fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'ホーム画面に追加（アプリ化）して通知を許可すると、'
-                        'アプリを閉じていても呼び出しやリマインダーが届きます。',
-                        style:
-                            TextStyle(fontSize: 13, color: _sub, height: 1.7),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // ---- 簡単な文字の説明（動画の上） ----
-                      _steps(
-                        icon: Icons.phone_iphone,
-                        title: 'iPhoneなら　簡単に言うと↓',
-                        steps: const [
-                          'Safariでサイトを開く（他のもので開いてもできないことがあります）',
-                          '「共有 ⬆︎」→「ホーム画面に追加」の順にタップ',
-                          '追加されたIdentityEアプリを開き、通知を許可する',
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      _steps(
-                        icon: Icons.android,
-                        title: 'Androidなら　簡単に言うと↓',
-                        steps: const [
-                          'Chromeでサイトを開く',
-                          '右上の「⋮」→「ホーム画面に追加」（または「アプリをインストール」）をタップ',
-                          '追加されたアプリを開き、通知を許可する',
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // ---- 解説動画（YouTube Shorts 埋め込み） ----
-                      const Text(
-                        '動画で見る',
-                        style: TextStyle(
-                            fontSize: 13,
-                            color: _ink,
-                            fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 10),
-                      Center(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: SizedBox(
-                            width: 270,
-                            height: 480, // Shorts(9:16)
-                            child: buildYoutubeEmbedImpl('ymC6lPMrjH8'),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          style:
-                              TextButton.styleFrom(foregroundColor: _blue),
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('閉じる',
-                              style: TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w600)),
-                        ),
-                      ),
+                      _seg('iPhone', 0),
+                      Container(width: 1, color: _line),
+                      _seg('Android', 1),
                     ],
                   ),
                 ),
-              ),
+                const SizedBox(height: 20),
+
+                // ---- 手順（プレーンな番号リスト） ----
+                for (var i = 0; i < steps.length; i++) ...[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 28,
+                        child: Text('${i + 1}.',
+                            style: const TextStyle(
+                                fontSize: 14, color: _sub, height: 1.6)),
+                      ),
+                      Expanded(
+                        child: Text(steps[i],
+                            style: const TextStyle(
+                                fontSize: 14, color: _ink, height: 1.6)),
+                      ),
+                    ],
+                  ),
+                  if (i < steps.length - 1)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 10),
+                      child: Divider(height: 1, color: Color(0xFFF1F3F4)),
+                    ),
+                ],
+                if (_os == 0) ...[
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Safari 以外のブラウザでは追加できないことがあります。',
+                    style: TextStyle(fontSize: 12, color: _sub, height: 1.6),
+                  ),
+                ],
+                const SizedBox(height: 20),
+                const Divider(height: 1, color: _line),
+                const SizedBox(height: 8),
+
+                // ---- 動画（折りたたみ） ----
+                InkWell(
+                  onTap: () => setState(() => _showVideo = !_showVideo),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Row(
+                      children: [
+                        const Expanded(
+                          child: Text('動画で見る',
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  color: _ink,
+                                  fontWeight: FontWeight.w500)),
+                        ),
+                        Icon(
+                          _showVideo
+                              ? Icons.keyboard_arrow_up
+                              : Icons.keyboard_arrow_down,
+                          size: 20,
+                          color: _sub,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_showVideo) ...[
+                  const SizedBox(height: 8),
+                  Center(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: SizedBox(
+                        width: 270,
+                        height: 480, // Shorts(9:16)
+                        child: buildYoutubeEmbedImpl('ymC6lPMrjH8'),
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    style: TextButton.styleFrom(foregroundColor: _blue),
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('OK',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w500)),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _steps({
-    required IconData icon,
-    required String title,
-    required List<String> steps,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        border: Border.all(color: _line),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+  Widget _seg(String text, int value) {
+    final sel = _os == value;
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => _os = value),
+        borderRadius: BorderRadius.horizontal(
+          left: value == 0 ? const Radius.circular(20) : Radius.zero,
+          right: value == 1 ? const Radius.circular(20) : Radius.zero,
+        ),
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: sel ? _blueBg : Colors.transparent,
+            borderRadius: BorderRadius.horizontal(
+              left: value == 0 ? const Radius.circular(19) : Radius.zero,
+              right: value == 1 ? const Radius.circular(19) : Radius.zero,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 18, color: _blue),
-              const SizedBox(width: 8),
-              Text(title,
-                  style: const TextStyle(
+              if (sel) ...[
+                const Icon(Icons.check, size: 16, color: _blue),
+                const SizedBox(width: 6),
+              ],
+              Text(text,
+                  style: TextStyle(
                       fontSize: 13.5,
-                      color: _ink,
-                      fontWeight: FontWeight.w600)),
+                      color: sel ? _blue : _ink,
+                      fontWeight: sel ? FontWeight.w500 : FontWeight.w400)),
             ],
           ),
-          const SizedBox(height: 10),
-          for (var i = 0; i < steps.length; i++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 20,
-                    child: Text('${i + 1}.',
-                        style: const TextStyle(
-                            fontSize: 12.5,
-                            color: _blue,
-                            fontWeight: FontWeight.w600)),
-                  ),
-                  Expanded(
-                    child: Text(steps[i],
-                        style: const TextStyle(
-                            fontSize: 12.5, color: _ink, height: 1.6)),
-                  ),
-                ],
-              ),
-            ),
-        ],
+        ),
       ),
     );
   }
