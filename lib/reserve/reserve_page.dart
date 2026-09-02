@@ -381,7 +381,10 @@ class _ReservePageState extends State<ReservePage> {
             style: TextStyle(
                 fontSize: 26, color: _ink, fontWeight: FontWeight.w400)),
         const SizedBox(height: 6),
-        const SizedBox(height: 32),
+        const Text('体験予約',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, color: _sub)),
+        const SizedBox(height: 36),
         if (_loading || _authChecking)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 60),
@@ -399,10 +402,12 @@ class _ReservePageState extends State<ReservePage> {
           _message(Icons.event_busy, '現在予約可能な日程はありません')
         else ...[
           _accountBar(),
-          const SizedBox(height: 20),
+          const SizedBox(height: 28),
           _dateSelector(),
-          const SizedBox(height: 24),
-          if (_selectedDate != null) _slotGrid(),
+          if (_selectedDate != null) ...[
+            const SizedBox(height: 28),
+            _slotGrid(),
+          ],
           // 確認カードはなめらかに展開（選択時にフェード＋スライド）
           AnimatedSize(
             duration: const Duration(milliseconds: 300),
@@ -478,38 +483,48 @@ class _ReservePageState extends State<ReservePage> {
     );
   }
 
-  // ---- ログイン中アカウント表示 ----
+  // ---- ログイン中アカウント表示（罫線区切りのプレーンな1行） ----
   Widget _accountBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FA),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _line),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.account_circle, size: 18, color: _green),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              _email ?? 'ログイン済み',
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13, color: _ink),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                _email ?? 'ログイン済み',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13, color: _sub),
+              ),
             ),
-          ),
-          TextButton(
-            onPressed: _logout,
-            style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-            child: const Text('別のアカウント',
-                style: TextStyle(fontSize: 12, color: _accent)),
-          ),
-        ],
-      ),
+            TextButton(
+              onPressed: _logout,
+              style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+              child: const Text('アカウントを変更',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: _accent,
+                      fontWeight: FontWeight.w500)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(height: 1, color: _line),
+      ],
     );
+  }
+
+  // Google風のセクション見出し（小さめグレー・字間広め）
+  Widget _sectionLabel(String text) {
+    return Text(text,
+        style: const TextStyle(
+            fontSize: 12,
+            color: _sub,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0.8));
   }
 
   Widget _message(IconData icon, String text, {bool retry = false}) {
@@ -544,9 +559,7 @@ class _ReservePageState extends State<ReservePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('1. 日付を選択',
-            style: TextStyle(
-                fontSize: 13, color: _sub, fontWeight: FontWeight.w600)),
+        _sectionLabel('日付'),
         const SizedBox(height: 12),
         Wrap(
           spacing: 8,
@@ -581,12 +594,11 @@ class _ReservePageState extends State<ReservePage> {
   Widget _slotGrid() {
     final daySlots =
         _slots.where((s) => _dateKey(s) == _selectedDate).toList();
+    final anyFull = daySlots.any((s) => s.available <= 0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('2. 時間を選択',
-            style: TextStyle(
-                fontSize: 13, color: _sub, fontWeight: FontWeight.w600)),
+        _sectionLabel('時間'),
         const SizedBox(height: 12),
         Wrap(
           spacing: 8,
@@ -595,155 +607,171 @@ class _ReservePageState extends State<ReservePage> {
             for (final s in daySlots) _slotChip(s),
           ],
         ),
+        if (anyFull) ...[
+          const SizedBox(height: 10),
+          const Text('薄い色の時間帯は満席です',
+              style: TextStyle(fontSize: 12, color: _sub)),
+        ],
       ],
     );
   }
 
+  // Googleカレンダーの予約枠風: 時刻だけの矩形。選択で青塗り・白文字。
   Widget _slotChip(ReserveSlot s) {
     final full = s.available <= 0;
     final sel = _selected?.start == s.start;
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: full ? null : () => setState(() => _selected = s),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
-        width: 104,
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: full
-              ? const Color(0xFFF1F3F4)
-              : sel
-                  ? const Color(0xFFE8F0FE)
-                  : Colors.white,
-          border: Border.all(color: sel ? _accent : _line),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          children: [
-            Text(_hm(s.start),
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: full ? _sub.withValues(alpha: 0.5) : (sel ? _accent : _ink))),
-            const SizedBox(height: 2),
-            Text(
-              full ? '満席' : '残り${s.available}組',
-              style: TextStyle(
-                  fontSize: 11,
-                  color: full
-                      ? _sub.withValues(alpha: 0.5)
-                      : (s.available <= 1 ? _red : _green)),
+    return Tooltip(
+      message: full ? '満席' : '残り${s.available}組',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: full ? null : () => setState(() => _selected = s),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          width: 92,
+          height: 42,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: full
+                ? const Color(0xFFF8F9FA)
+                : sel
+                    ? _accent
+                    : Colors.white,
+            border: Border.all(
+                color: sel
+                    ? _accent
+                    : full
+                        ? Colors.transparent
+                        : _line),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            _hm(s.start),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: full
+                  ? _sub.withValues(alpha: 0.45)
+                  : sel
+                      ? Colors.white
+                      : _accent,
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  // ---- 確認カード ----
+  // ---- 確認セクション（カード枠なし、罫線と余白で区切るGoogle風） ----
   Widget _confirmCard() {
     final s = _selected!;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        border: Border.all(color: _line),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text('3. 予約内容の確認',
-              style: TextStyle(
-                  fontSize: 13, color: _sub, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              const Icon(Icons.event, size: 18, color: _sub),
-              const SizedBox(width: 10),
-              Text('$_selectedDate ${_hm(s.start)}〜${_hm(s.end)}',
-                  style: const TextStyle(fontSize: 15, color: _ink)),
-            ],
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _nameCtrl,
-            maxLength: 20,
-            decoration: InputDecoration(
-              labelText: 'お名前・ニックネーム（任意）',
-              labelStyle: const TextStyle(fontSize: 13, color: _sub),
-              counterText: '',
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: _line),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: _accent),
-              ),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              helperText: 'ニックネームは後から変更できません。口コミ投稿時の表示名にもなります。',
-              helperStyle: const TextStyle(
-                  fontSize: 11.5, color: _sub, height: 1.5),
-              helperMaxLines: 2,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(height: 1, color: _line),
+        const SizedBox(height: 24),
+        Text('$_selectedDate ${_hm(s.start)}〜${_hm(s.end)}',
+            style: const TextStyle(
+                fontSize: 18, color: _ink, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 4),
+        Text('残り${s.available}組',
+            style: TextStyle(
+                fontSize: 13, color: s.available <= 1 ? _red : _sub)),
+        const SizedBox(height: 24),
+        TextField(
+          controller: _nameCtrl,
+          maxLength: 20,
+          decoration: InputDecoration(
+            labelText: 'お名前・ニックネーム（任意）',
+            labelStyle: const TextStyle(fontSize: 14, color: _sub),
+            floatingLabelStyle: const TextStyle(fontSize: 13, color: _accent),
+            counterText: '',
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(4),
+              borderSide: const BorderSide(color: _line),
             ),
-            style: const TextStyle(fontSize: 14, color: _ink),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(4),
+              borderSide: const BorderSide(color: _accent, width: 2),
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            helperText:
+                'ニックネームは後から変更できません。口コミ投稿時の表示名にもなります。',
+            helperStyle:
+                const TextStyle(fontSize: 11.5, color: _sub, height: 1.5),
+            helperMaxLines: 2,
           ),
-          const SizedBox(height: 16),
-          const Text('人数（3人または4人のグループで予約できます）',
-              style: TextStyle(
-                  fontSize: 13, color: _sub, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              for (final n in const [3, 4]) ...[
-                if (n != 3) const SizedBox(width: 8),
-                Expanded(
-                  child: ChoiceChip(
-                    label: SizedBox(
-                      width: double.infinity,
-                      child: Text('$n人', textAlign: TextAlign.center),
-                    ),
-                    selected: _party == n,
-                    onSelected: (_) => setState(() => _party = n),
-                    showCheckmark: false,
-                    selectedColor: const Color(0xFFE8F0FE),
-                    backgroundColor: Colors.white,
-                    labelStyle: TextStyle(
-                      fontSize: 14,
-                      color: _party == n ? _accent : _ink,
-                      fontWeight:
-                          _party == n ? FontWeight.w600 : FontWeight.w400,
-                    ),
-                    side: BorderSide(color: _party == n ? _accent : _line),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20)),
-                  ),
+          style: const TextStyle(fontSize: 14, color: _ink),
+        ),
+        const SizedBox(height: 24),
+        _sectionLabel('人数'),
+        const SizedBox(height: 4),
+        const Text('3人または4人のグループで予約できます',
+            style: TextStyle(fontSize: 12, color: _sub)),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            for (final n in const [3, 4]) ...[
+              if (n != 3) const SizedBox(width: 8),
+              _partyChip(n),
+            ],
+          ],
+        ),
+        const SizedBox(height: 32),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            SizedBox(
+              height: 40,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: _accent,
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
                 ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            height: 48,
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: _accent,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24)),
+                onPressed: _submitting ? null : _submit,
+                child: _submitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                    : const Text('予約を確定',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w500)),
               ),
-              onPressed: _submitting ? null : _submit,
-              child: _submitting
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2))
-                  : const Text('予約を確定する', style: TextStyle(fontSize: 15)),
             ),
-          ),
-        ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  // 人数選択：時間チップと同じ言語（選択で青塗り）
+  Widget _partyChip(int n) {
+    final sel = _party == n;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => setState(() => _party = n),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        width: 92,
+        height: 42,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: sel ? _accent : Colors.white,
+          border: Border.all(color: sel ? _accent : _line),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text('$n人',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: sel ? Colors.white : _accent,
+            )),
       ),
     );
   }
