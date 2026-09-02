@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../dashboard/widgets/paper_issue_dialog.dart';
 import '../models/ticket.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
@@ -88,6 +89,35 @@ class _DeskPageState extends State<DeskPage> {
     _load();
   }
 
+  Future<void> _issuePaper() async {
+    final r = await showPaperIssueDialog(context);
+    if (r == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await ApiService.instance.issueTicket(
+        kind: 'paper',
+        label: r.label,
+        reservedSlot:
+            r.slotAt == null ? 0 : r.slotAt!.millisecondsSinceEpoch ~/ 1000,
+        place: r.place,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('整理券を発行しました（${r.label}）'),
+        backgroundColor: _green,
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('発行に失敗しました: $e'),
+        backgroundColor: _red,
+      ));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    _load();
+  }
+
   // ---- helpers ----
   String _elapsed(int since) {
     if (since <= 0) return '';
@@ -137,6 +167,25 @@ class _DeskPageState extends State<DeskPage> {
             child: Center(
               child: Text('待機 ${waiting.length} ／ 呼出 ${called.length}',
                   style: const TextStyle(fontSize: 13, color: _sub)),
+            ),
+          ),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: FilledButton.icon(
+                onPressed: _busy ? null : _issuePaper,
+                style: FilledButton.styleFrom(
+                  backgroundColor: _accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
+                ),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('発行',
+                    style:
+                        TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
             ),
           ),
           IconButton(
