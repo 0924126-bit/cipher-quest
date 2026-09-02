@@ -914,7 +914,7 @@ class _TicketPageState extends State<TicketPage> {
           ),
         if (t.place.isNotEmpty) _kv('集合場所', t.place),
         _kv('あなたの前', t.position <= 0 ? 'なし（次です）' : '${t.position} 組'),
-        _kv('開始まで', mins <= 1 ? 'まもなく' : '約 $mins 分'),
+        _kv('開始まで', '約 ${mins < 1 ? 1 : mins} 分後'),
         const SizedBox(height: 8),
         const Text(
           '順番が近づくと通知でお知らせします。予想時刻は進行状況で自動的に更新されます。',
