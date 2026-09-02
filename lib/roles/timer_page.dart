@@ -38,7 +38,6 @@ class _TimerPageState extends State<TimerPage>
   bool _running = false;
   bool _finished = false;
   Timer? _tick;
-  Timer? _poll;
 
   // 蛍光灯の明滅
   final math.Random _rand = math.Random();
@@ -63,33 +62,81 @@ class _TimerPageState extends State<TimerPage>
       duration: const Duration(milliseconds: 2400),
     )..repeat();
     _scheduleFlicker();
+    // 初回だけHTTPで即時表示（WS接続前でも設定・音が揃う）。
     _load();
-    // ページ表示中は音源マップを取得（デフォルトはビルド内蔵）
     _loadSounds();
-    // 設定変更・全体リセット・キー音割当の反映（軽量ポーリング）
-    _poll = Timer.periodic(const Duration(seconds: 5), (_) {
-      _load();
-      _loadSounds();
-    });
+    // 以降の設定変更・全体リセット・キー音割当は /ws/hunter の
+    // プッシュ（init/roles/sounds）で反映。ポーリングは行わない
+    // （Cloudflare無料枠のリクエスト数節約）。
     _connectCurseFeed();
   }
 
-  /// 呪術師の発動をリアルタイム受信してタイマー側から自動で鳴らす。
+  /// /ws/hunter に乗り合いして、呪い発動・設定変更・音割当変更を
+  /// すべてプッシュで受け取る（HTTPポーリング廃止）。
   /// init メッセージの recent_curses(過去履歴) では鳴らさず、
   /// 接続中に届いた 'curse' イベントだけで鳴らす。
   void _connectCurseFeed() {
     final s = SocketService('/ws/hunter', autoReconnect: true);
     _curseSocket = s;
     _curseSub = s.messages.listen((msg) {
-      if (msg['type'] != 'curse') return;
-      // ダッシュボードで割り当てたmp3があればそれを、
-      // なければ内蔵の合成緊張音（3秒）を鳴らす。
-      if (!SoundService.instance.playCurseCustom()) {
-        AlarmService.instance.playCurseAlarm();
+      switch (msg['type']) {
+        case 'curse':
+          // ダッシュボードで割り当てたmp3があればそれを、
+          // なければ内蔵の合成緊張音（3秒）を鳴らす。
+          if (!SoundService.instance.playCurseCustom()) {
+            AlarmService.instance.playCurseAlarm();
+          }
+          AlarmService.instance.vibrate();
+          break;
+        case 'init':
+          // 接続/再接続のたびに最新設定・音マップが届く
+          _applyRoles(msg['roles']);
+          _applySoundMaps(msg['sounds'], msg['keys'], msg['fx']);
+          break;
+        case 'roles':
+          _applyRoles(msg['roles']);
+          break;
+        case 'sounds':
+          // sounds ブロードキャストは音URLマップを 'roles' キーで運ぶ
+          _applySoundMaps(msg['roles'], msg['keys'], msg['fx']);
+          break;
       }
-      AlarmService.instance.vibrate();
     });
     s.connect();
+  }
+
+  /// WSで届いた RoleConfig を反映（_load と同じ規則）。
+  void _applyRoles(dynamic raw) {
+    if (raw is! Map<String, dynamic>) return;
+    if (!mounted) return;
+    final cfg = RoleConfig.fromJson(raw).timer;
+    final prevResetAt = _cfg.resetAt;
+    setState(() {
+      _cfg = cfg;
+      if (!_running && !_finished) _remaining = _cfg.durationSec;
+    });
+    // ダッシュボードの全体リセットを検知したらタイマーもリセット
+    if (prevResetAt != 0 && _cfg.resetAt > prevResetAt) {
+      _reset();
+    }
+  }
+
+  /// WSで届いた音マップを反映（_loadSounds と同じ規則）。
+  void _applySoundMaps(dynamic roleMap, dynamic keyMap, dynamic fxMap) {
+    if (roleMap is! Map<String, dynamic>) return;
+    SoundService.instance.updateSources({
+      'timer_bgm':
+          (roleMap['timer_bgm'] as String?) ?? '/audio/timer_bgm.mp3',
+      'timer_key':
+          (roleMap['timer_key'] as String?) ?? '/audio/timer_key.mp3',
+      'curse': roleMap['curse'], // null=合成音フォールバック
+    });
+    if (keyMap is Map<String, dynamic>) {
+      SoundService.instance.updateKeySounds(keyMap);
+    }
+    if (fxMap is Map<String, dynamic>) {
+      SoundService.instance.updateFx(fxMap);
+    }
   }
 
   Future<void> _load() async {
@@ -226,7 +273,6 @@ class _TimerPageState extends State<TimerPage>
   @override
   void dispose() {
     _tick?.cancel();
-    _poll?.cancel();
     _flickerTimer?.cancel();
     _curseSub?.cancel();
     _curseSocket?.dispose();
