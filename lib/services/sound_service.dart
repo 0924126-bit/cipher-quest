@@ -71,6 +71,15 @@ class SoundService {
   void playSkillResult(bool success) =>
       _backend.play(success ? 'skill_success' : 'skill_fail');
 
+  /// 呪い発動音。ダッシュボードで 'curse' ロールにmp3が
+  /// 割り当てられていればそれを鳴らして true、なければ false
+  /// （呼出側は合成音 playCurseAlarm 等にフォールバック）。
+  bool playCurseCustom() {
+    if (!_backend.hasSource('curse')) return false;
+    _backend.playOneShot('curse');
+    return true;
+  }
+
   // ---- horror timer ----
   void startTimerBgm() => _backend.play('timer_bgm', loop: true);
   void stopTimerBgm() => _backend.stop('timer_bgm');
