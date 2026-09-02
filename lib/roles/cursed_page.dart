@@ -8,6 +8,7 @@ import '../models/role_config.dart';
 import '../services/alarm_service.dart';
 import '../services/api_service.dart';
 import '../services/fullscreen_service.dart';
+import '../services/socket_service.dart';
 
 /// 呪術師用ページ。
 ///
@@ -30,8 +31,9 @@ class _CursedPageState extends State<CursedPage>
 
   int _cooldownLeft = 0;
   Timer? _cooldown;
-  Timer? _configPoll;
   bool _justFired = false;
+  SocketService? _socket;
+  StreamSubscription? _wsSub;
 
   late final AnimationController _breath;
 
@@ -44,10 +46,34 @@ class _CursedPageState extends State<CursedPage>
       vsync: this,
       duration: const Duration(milliseconds: 2400),
     )..repeat(reverse: true);
+    // 初回だけHTTPで即時表示。以降の設定変更（ボタン画像差替含む）
+    // は /ws/hunter のプッシュで反映。ポーリングは行わない
+    // （Cloudflare無料枠のリクエスト数節約）。
     _loadConfig();
-    _configPoll = Timer.periodic(const Duration(seconds: 5), (_) {
-      _loadConfig();
+    _connectFeed();
+  }
+
+  void _connectFeed() {
+    final s = SocketService('/ws/hunter', autoReconnect: true);
+    _socket = s;
+    _wsSub = s.messages.listen((msg) {
+      final type = msg['type'];
+      if (type != 'init' && type != 'roles') return;
+      final roles = msg['roles'];
+      if (roles is! Map<String, dynamic>) return;
+      if (!mounted) return;
+      final cfg = RoleConfig.fromJson(roles).cursed;
+      // ボタン画像を先読みして表示遅延をなくす
+      if (cfg.buttonImage.isNotEmpty &&
+          cfg.buttonImage != _config.buttonImage) {
+        precacheImage(NetworkImage(cfg.buttonImage), context);
+      }
+      setState(() {
+        _config = cfg;
+        _loading = false;
+      });
     });
+    s.connect();
   }
 
   Future<void> _loadConfig() async {
@@ -103,7 +129,8 @@ class _CursedPageState extends State<CursedPage>
   @override
   void dispose() {
     _cooldown?.cancel();
-    _configPoll?.cancel();
+    _wsSub?.cancel();
+    _socket?.dispose();
     _breath.dispose();
     super.dispose();
   }
