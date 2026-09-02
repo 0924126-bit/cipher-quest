@@ -46,6 +46,13 @@ class _TicketPageState extends State<TicketPage> {
   Timer? _poll;
   SocketService? _socket;
   StreamSubscription? _socketSub;
+  StreamSubscription? _socketStatusSub;
+
+  /// オフライン判定: WS切断中かつ 直近のAPI更新も失敗しているとき。
+  /// キャッシュ済みの整理券を表示しつつ「オフラインモード」を明示する。
+  bool _wsConnected = false;
+  bool _lastFetchFailed = false;
+  bool get _offline => !_wsConnected && _lastFetchFailed;
 
   // 通知の重複防止
   String _lastNotifiedStatus = '';
@@ -234,9 +241,16 @@ class _TicketPageState extends State<TicketPage> {
       if (msg['type'] == 'ticket' && msg['ticket'] is Map<String, dynamic>) {
         final t = Ticket.fromJson(msg['ticket'] as Map<String, dynamic>);
         _maybeNotify(t);
-        setState(() => _ticket = t);
+        setState(() {
+          _ticket = t;
+          _lastFetchFailed = false;
+        });
         _cache(t);
       }
+    });
+    _socketStatusSub = s.connectionStatus.listen((ok) {
+      if (!mounted) return;
+      setState(() => _wsConnected = ok);
     });
     s.connect();
     _socket = s;
@@ -245,6 +259,8 @@ class _TicketPageState extends State<TicketPage> {
   void _disconnectSocket() {
     _socketSub?.cancel();
     _socketSub = null;
+    _socketStatusSub?.cancel();
+    _socketStatusSub = null;
     _socket?.dispose();
     _socket = null;
   }
@@ -301,6 +317,9 @@ class _TicketPageState extends State<TicketPage> {
       'called_at': t.calledAt,
       'position': t.position,
       'eta_sec': t.etaSec,
+      'reserved_slot': t.reservedSlot,
+      'place': t.place,
+      'party': t.party,
       'game_sec': t.gameSec,
       'interval_sec': t.intervalSec,
       'late_cancel_sec': t.lateCancelSec,
@@ -326,10 +345,14 @@ class _TicketPageState extends State<TicketPage> {
       final t = await ApiService.instance.ticketState(code);
       if (!mounted || t == null) return;
       _maybeNotify(t);
-      setState(() => _ticket = t);
+      setState(() {
+        _ticket = t;
+        _lastFetchFailed = false;
+      });
       _cache(t);
     } catch (_) {
-      // オフライン時はキャッシュ表示を維持
+      // オフライン時はキャッシュ表示を維持し、オフラインモードを明示
+      if (mounted) setState(() => _lastFetchFailed = true);
     }
   }
 
@@ -668,6 +691,56 @@ class _TicketPageState extends State<TicketPage> {
     );
   }
 
+  /// オフラインモードの明示バナー。通信断でも保存済みの券面は見られる。
+  /// なめらかに出入りする（AnimatedSize + フェード）。
+  Widget _offlineBanner() {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: !_offline
+          ? const SizedBox(width: double.infinity)
+          : Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 16),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF7E0),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Icon(Icons.cloud_off, size: 18, color: Color(0xFFB05A00)),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('オフラインモード',
+                            style: TextStyle(
+                                fontSize: 13.5,
+                                color: Color(0xFFB05A00),
+                                fontWeight: FontWeight.w600)),
+                        SizedBox(height: 2),
+                        Text(
+                          '通信できないため、最後に取得した整理券情報を表示しています。'
+                          '接続が戻ると自動的に最新の状態へ更新されます。',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFFB05A00),
+                              height: 1.6),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
   /// 通知未許可の案内カード。
   /// Google風: 白地 + 薄いグレー枠、小さなアイコン、控えめな本文、
   /// 右下に緑のテキストボタンだけを置くミニマルな構成。
@@ -771,6 +844,7 @@ class _TicketPageState extends State<TicketPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                _offlineBanner(),
                 _notifyBanner(),
                 // PWA未導入の人向け: ホーム画面追加の案内（手順+動画）
                 const PwaInstallGuideCard(),
