@@ -13,6 +13,11 @@ class SocketService {
   Timer? _pingTimer;
   Timer? _reconnectTimer;
   bool _closed = false;
+
+  /// Reconnect backoff (seconds). Doubles up to 60s to avoid hammering
+  /// the server (each WS handshake counts against the free tier);
+  /// resets to 2s once a connection delivers a message.
+  int _backoffSec = 2;
   final bool autoReconnect;
   final String path; // e.g. /ws/dashboard or /ws/machine/xxx
 
@@ -53,6 +58,7 @@ class SocketService {
         (raw) {
           if (!_connected) {
             _connected = true;
+            _backoffSec = 2; // healthy again -> fast reconnects
             _statusController.add(true);
           }
           try {
@@ -82,7 +88,8 @@ class SocketService {
     _pingTimer?.cancel();
     if (autoReconnect && !_closed) {
       _reconnectTimer?.cancel();
-      _reconnectTimer = Timer(const Duration(seconds: 2), connect);
+      _reconnectTimer = Timer(Duration(seconds: _backoffSec), connect);
+      _backoffSec = (_backoffSec * 2).clamp(2, 60);
     }
   }
 
