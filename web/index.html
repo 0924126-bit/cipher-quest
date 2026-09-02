@@ -197,6 +197,72 @@
       if (onRolePage()) pin();
     })();
 
+    // ---- auto-update check (lightweight) ----
+    // The deploy step writes build_id.js (window.__IE_BUILD_ID, cached with
+    // this build) and build_id.json (~25 bytes, always fetched no-store).
+    // If the ids differ the client is stale -> hard refresh with an
+    // "アップデート中…" screen. Checks: 4s after launch, when the app
+    // returns to foreground, and every 10 minutes. No heavy polling.
+    (function () {
+      var REFRESH_GUARD_KEY = 'ie_upd_last_refresh';
+      function check() {
+        if (!window.__IE_BUILD_ID) return; // dev or missing -> skip
+        fetch('build_id.json?t=' + Date.now(), { cache: 'no-store' })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) {
+            if (!d || !d.id) return;
+            if (d.id === window.__IE_BUILD_ID) return;
+            // reload-loop guard: at most once per minute
+            try {
+              var last = parseInt(localStorage.getItem(REFRESH_GUARD_KEY) || '0', 10);
+              if (Date.now() - last < 60000) return;
+              localStorage.setItem(REFRESH_GUARD_KEY, String(Date.now()));
+            } catch (_) {}
+            window.__hardRefresh();
+          })
+          .catch(function () {});
+      }
+      setTimeout(check, 4000);
+      setInterval(check, 10 * 60 * 1000);
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') setTimeout(check, 1200);
+      });
+    })();
+
+    // ---- hard refresh for auto-update ----
+    // Shows a Google-minimal "アップデート中…" overlay, unregisters
+    // service workers, clears CacheStorage, then reloads. Called from
+    // Dart (UpdateService) when the server build id differs.
+    window.__hardRefresh = async function () {
+      try {
+        var d = document.createElement('div');
+        d.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:Roboto,"Noto Sans JP",system-ui,sans-serif;';
+        d.innerHTML =
+          '<style>@keyframes updspin{to{transform:rotate(360deg)}}</style>' +
+          '<div style="width:30px;height:30px;border:3px solid #e8eaed;border-top-color:#1a73e8;border-radius:50%;animation:updspin .8s linear infinite"></div>' +
+          '<div style="margin-top:20px;color:#202124;font-size:15px">アップデート中…</div>' +
+          '<div style="margin-top:6px;color:#5f6368;font-size:12px">最新バージョンに更新しています</div>';
+        document.body.appendChild(d);
+      } catch (_) {}
+      try {
+        if (navigator.serviceWorker) {
+          var regs = await navigator.serviceWorker.getRegistrations();
+          for (var i = 0; i < regs.length; i++) {
+            try { await regs[i].unregister(); } catch (_) {}
+          }
+        }
+      } catch (_) {}
+      try {
+        if (window.caches) {
+          var keys = await caches.keys();
+          for (var j = 0; j < keys.length; j++) {
+            try { await caches.delete(keys[j]); } catch (_) {}
+          }
+        }
+      } catch (_) {}
+      setTimeout(function () { location.reload(); }, 400);
+    };
+
     // Fake-but-honest progress: advances while scripts download, jumps to 100 on first frame.
     (function () {
       var pct = 0;
